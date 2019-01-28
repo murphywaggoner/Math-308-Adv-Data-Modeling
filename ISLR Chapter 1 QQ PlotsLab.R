@@ -44,7 +44,7 @@ qqnormline <- function(mydata){
   # using a normal distribution for the comparison
   pt1 <- c(qnorm(0.25), quantile(mydata, 0.25))
   pt2 <- c(qnorm(0.75), quantile(mydata, 0.75)) 
-  m <- (pt1[[2]] - pt2[[2]])/(pt1[[1]] - pt2[[2]])
+  m <- (pt1[[2]] - pt2[[2]])/(pt1[[1]] - pt2[[1]])
   b <- -pt1[[1]]*m + pt1[[2]]
   
   # To use the output, the slope is in element [[1]] and
