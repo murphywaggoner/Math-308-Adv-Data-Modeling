@@ -1,0 +1,261 @@
+---
+title: "Box-Cox Transformations for Skewed Data"
+author: "M. E. Waggoner"
+date: "December 28, 2018"
+output: 
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=4, fig.height=2.33) 
+library(tidyverse)
+
+options(digits = 4)
+```
+
+
+# Power Transformations
+
+## Log transformations
+
+When analyzing variables that are right skewed, it is common to consider logarithmic units instead of the original units.  A log transformation retains the original ordering of the values, but pulls in extreme values. The international adoption example below illustrates the effects of log transformation.
+
+## Box-Cox transformations of one and two parameters
+
+More generally, we can apply *power transformations* to data that are skewed to try to symmetrize them.  Power transformations, also known as the *Box-Cox family of transforms*.  The one-parameter family of transforms can be expressed as
+
+$$z^{(\lambda)}=\left\lbrace\begin{array}{ll}\frac{z^{\lambda}-1}{\lambda} & \lambda\neq 0 \\ \log z& \lambda = 0\end{array}\right. .$$
+Typical values of $\lambda$ in practice are $\lambda = 1, 1/2, 0,$ or $-1$.  
+Note that $$\lim_{\lambda\rightarrow 0} \frac{z^{\lambda} - 1}{\lambda} = \log z.$$        
+For positive $z$, the power transformations for $\lambda = 1, 1/2,$ and $0$ are monotonically increasing and do not change the order of $z$.
+
+## Box-Cox transformations with two parameters
+
+For nonnegative $z$ with zero values, the log transform results in values interpreted by R as $-\infty$.  To avoid these values that are not plottable, we can use a translated version of the Box-Cox transformations.
+
+$$z^{(\lambda,\gamma)}=\left\lbrace\begin{array}{ll}\frac{(z+\gamma)^{\lambda}-1}{\lambda} & \lambda\neq 0 \\ \log (z+\gamma)& \lambda = 0\end{array}\right. .$$
+
+
+
+
+# Example: International Adoption Rates
+
+## Background
+
+During the years 1988-1992 delegates from 65 countries gather in The Hague to create a multilateral treaty to facilitate and safeguard intercountry adoptions.  Many U.S. states and the federal government have instituted legislation recently concerning adoption and the rights of biological parents, adoptive parents, and adopted children.  Despite the lack of consistent procedures governing international adoption, U.S. citizens have adopted many children from foreign countries, with the number of visas issued for that purpose consistently between 5,000 and 10,000 annually (as of 1995).
+
+What do the numbers of international adoptions tell us about the process?  Is the process stable, or does it vary over time? The data set examined here represents the number of visas issued by the U.S. Immigration and Naturalization Service for the purpose of adoption by U.S. residents.  The source is *Ours Magazine*, May/June 1992.  The number of visas is categorized by country or region of origin and the fiscal years of 1988, 1991 and 1992  The fiscal year covers October 1 of the previous year through September 30 of the current year.  The values for 1988 will be the primary focus here, with the relationships of the 1988 values with those of other years also being examined.  Note that for most countries, the number of visas issued in any of those year was zero.  Analysis will be focused on those countries or regions with nonzero values.
+
+## Exploring the data
+
+Read in the data, which is formatted in fixed column widths.  Specify the column type as well since two countries (Guatemala and Greece) have an "M" in the 1992 column, which we must assume stands for "Missing".  Without specifying the column types, *read_fwf* assumes the 1992 column is character data.  With the column type specifications, the "M"s are interpreted as NA.
+
+```{r}
+adopt <- read_fwf(file = "ADOPT.DAT", 
+                  col_types = cols("country" = col_character(),
+                            "1988" = col_integer(),
+                            "1991" = col_integer(),
+                            "1992" = col_integer()),
+                  fwf_empty("ADOPT.DAT",
+                            col_names = c("country", 
+                                          "1988", 
+                                          "1991", 
+                                          "1992")
+                            ))
+head(adopt)
+class(adopt)
+```
+
+We would like to create side-by-side plots for each year, but we notice that this data is not tidy per Hadley Wickham's definition, since there are some values, the years, as variable names.  We need to reshape this data in a long dataset with columns "country", "year", "adoptions". This will allow us to use a *facet_wrap* to create one plot per year. When we first try to reshape we find that the year column is created as character, and so we also mutate the year to be integer.
+
+```{r}
+adopt_tidy <- adopt %>% 
+  gather(year, adoptions, -country) %>% 
+  mutate(year = as.integer(year))
+head(adopt_tidy)
+
+ggplot(adopt_tidy, aes(x="",y=adoptions, fill = as.factor(year)))+  
+  geom_boxplot() +
+  facet_wrap(~year)
+ggplot(adopt_tidy, aes(x=adoptions, fill = as.factor(year)))+
+  geom_histogram() +
+  facet_wrap(~year)
+
+```
+
+We see that the data is strongly skewed to the right, that is,  most countries for which any visas were issued had a small number issued, and so these plots are not very useful.  In the histograms, the bars that appear to have a zero height do not really but are simply much shorter than the tallest bars.
+
+This pattern is not very surprising since international adoption is a very political process.  Governments often decide as a matter of policy to what extent to allow international adoption.  For example, for many years U.S. families adopted more than 4,000 children per year from South Korea, but in 1989 Korea restricted such adoptions causing a large drop in the numbers after that year.
+
+The summary statistics also indicate long right tails.  The mean values are not very meaningful, being inflated by the few unusually large values.  Such unusual values are often called **outliers**, since they lie outside the range of most of the observations.  The median values are more reasonable as a "typical" value, since outliers have litte effect on it, and thus the median is called a **robust** statistic.  If we remove any 3 measurements, the mean may change significantly, but the median will change little.
+
+```{r}
+adopt_tidy %>% 
+  na.omit() %>%
+  group_by(year) %>% 
+  summarise(min = min(adoptions), 
+            first = quantile(adoptions, 0.25),
+            median = median(adoptions),
+            third = quantile(adoptions, 0.75),
+            max = max(adoptions),  
+            mean = mean(adoptions), 
+            count = n())
+```
+
+## Comparing adoptions across years 
+
+Suppose we wanted to make predictions for adoptions in one year based on the adoptions the previous year.  Thus, it would be useful to plot adoptions for each country in two years as a point, in particular, plotting 1991 data against 1988 data.  How does this look, and is it any more useful?
+
+We'll see how the *spread()* command is the opposite of the *gather()* command in *dplyr*.  Here we break out the adoptions (the *value*) by year (the *key*) so that we can plot points.  We could have just gone back to *adopt*, but  we will have created some more columns in *adopt_tidy* that we'll want to do this for later.
+
+```{r}
+adopt_tidy %>% 
+  spread(key = year, value = adoptions) ->
+  adopt_wide
+```
+
+
+```{r}
+ adopt_wide %>% 
+  ggplot(mapping = aes(x=`1988`, y = `1991`))+
+  geom_point() +
+  geom_text(mapping = aes(`1988`, `1991`, label = country,
+                           vjust = 1, hjust = 0.5),
+           size = 3)
+
+adopt_wide %>% 
+  ggplot(mapping = aes(x=`1991`, y = `1992`))+
+  geom_point() +
+  geom_text(mapping = aes(`1991`, `1992`, label = country,
+                           vjust = 1, hjust = 0.5),
+           size = 3)
+
+```
+
+Since the data for both 1988 and 1991 are skewed to the right, the scatter plot is not very helpful.  We see the outliers of Romania and South Korea, but the other points are tightly packed on top of each other.
+
+## Transform the data using logs
+
+This type of data with long right tails, or skewed right, often benefit from **transformation**; that is, choosing a different way to scale the data may provide more information about the structure of the data.  One transformation that works well for data skewed to the right is the logarithm.  We will just log base 10 here to easily be able to interpret the log values with respect to the original number of adoptions.
+
+Since some of the numbers of adoptions are 0, we can't just take the log of the adoptions.  We'll use a Box-Cox transformation with $\lambda = 0$ and $\gamma = 1$.  To make the code a little cleaner and since we will do this multiple times, let's create a function called `log10p` for "log base 10 of x plus 1."
+
+```{r}
+log10p <- function(x){log10(x + 1)}
+```
+
+
+Now, we'll create a new column in `adopt_tidy` for the `log10p` of adoptions. Then get summary statistics and plots.
+
+```{r}
+adopt_tidy <- adopt_tidy %>% 
+  mutate(log_adopt = log10p(adoptions)) 
+
+head(adopt_tidy)
+
+adopt_tidy %>% 
+  na.omit() %>%
+  group_by(year) %>% 
+  summarise(min = min(log_adopt), 
+            first = quantile(log_adopt, 0.25),
+            median = median(log_adopt),
+            third = quantile(log_adopt, 0.75),
+            max = max(log_adopt),  
+            mean = mean(log_adopt))
+ 
+  
+ ggplot(adopt_tidy, aes(x = year, 
+                        y =log_adopt, 
+                        fill =as.factor(year))) +
+  geom_boxplot()   
+   
+  
+ggplot(adopt_tidy, aes(x=log_adopt, fill = as.factor(year)))+
+  geom_histogram(binwidth = 0.3) +
+  facet_wrap(~year)
+```
+
+We lose the  ability to directly interpret the values of *log_adopt*, but we gain information into the data.  In the boxplots, we see there is only one outlier  and it is in 1988.  The median value of *log_adopt* in 1988 is 1.639, which we can convert back to number of adoptions by exponentiating, *adoptions* $= 10^{1.639}-1 = 42.65$.  This varies a little from the original median adoptions of 51 in 1988 because we deleted the records with missing values in 1992.
+
+How does the log transformation help in viewing the scatter plot?  We see that South Korea is still an outlier. Cambodia and Romania each had 0 adoptions in 1988, and so are plotted on the vertical axis.  Vietnam looks like it is on the vertical axis, but it had 1 visa in 1988.  On the other hand, the points for the other countries are no longer on top of each other and we can see the relationships between them. 
+
+
+```{r}
+
+adopt_tidy %>% 
+  select(country, year, log_adopt) %>% 
+  spread(key = year, value = log_adopt) -> adopt_wide_log
+
+adopt_wide_log %>% 
+  ggplot(mapping = aes(x=`1988`, y = `1991`))+
+  geom_point() +
+  geom_text(mapping = aes(`1988`, `1991`, label = country,
+                           vjust = 1, hjust = 0.5),
+           size = 3) +
+  geom_abline(slope = 1, intercept = 0)
+```
+
+The line where $y=x$ has been added to the plot.  This allows us to easily see which countries increased the number of visas from 1988 to 1991 (above the $y=x$ line), decrease (below the line), and stayed the same (on the line).  For instance, Vietnam increased the number of visas from 1988 to 1991, Brazil's number of visas stayed about the same, and Ecuador decreased their number of visas. Most countries are close to the $y=x$ line indicating that the pattern of adoptions was stable from 1988 to 1991.  South Korea is only exceptional because of the number of visas issued.
+
+The adoption visa pattern is even more stable from 1991 to 1992, with Romania standing out because of a decrease in the number of visas due to a change in policies in the years following the fall of the Comunist regime.  We also not that Peru's relatively large number of visas in 1991 was apparently an aberration since its number rose from 1998 to 1991 and then dropped  in 1992.  Thus, we need to be cognizant of shifts in policies towards international adoption when considering using the number of visas issued in one year to predict the number of visas to be issued in the next year.
+
+
+```{r}
+
+adopt_wide_log %>% 
+  ggplot(mapping = aes(x=`1991`, y = `1992`))+
+  geom_point() +
+  geom_text(mapping = aes(`1991`, `1992`, label = country,
+                           vjust = 1, hjust = 0.5),
+           size = 3) +
+  geom_abline(slope = 1, intercept = 0)
+```
+
+
+## Measuring Change in Change
+
+We will compare the changes from 1991 to 1992  to the changes from 1988 to 1991.  We will calculate change as $$change\_1991 = log_{10}\frac{adoptions[1991] + 1}{adoptions[1988] + 1}$$ and
+$$change\_1992 = log_{10}\frac{adoptions[1992] + 1}{adoptions[1991] + 1}$$
+and then plot $change\_1992$ against $change\_1991$.
+
+```{r}
+
+labels <- c("increase followed"," by increase",
+            "decrease followed"," by increase",
+            "decrease followed"," by decrease",
+            "increase followed"," by decrease")
+xlocs <- c(2, 2, -0.4, -0.4, -0.4, -0.4, 2, 2)
+ylocs <- c(0.35, 0.3, 0.35, 0.3, -1, -1.05, -1, -1.05)
+adopt %>% 
+  mutate(change_1991 = log10((`1991`+1)/(`1988`+1)),
+         change_1992 = log10((`1992`+1)/(`1991`+1))  ) %>% 
+  ggplot(mapping = aes(x = change_1991, y = change_1992)) + 
+  geom_point() +
+  geom_text(mapping = aes(change_1991, change_1992, label = country,
+                           vjust = 1, hjust = 0.5),
+           size = 3) +
+  geom_hline(yintercept=0) +
+  geom_vline(xintercept=0) +
+  annotate("text", 
+           x = xlocs, y = ylocs, 
+           label = labels, 
+           size = 2,
+           col = "red") 
+```
+
+We can interpret this scatter plot by where the points fall relative to the origin.  Romania, Cambodia, and Peru have values $(change\_1991, change\_1992) = (+, -)$ line, so they had large relative increases (+) from 1988 to 1991 and large relative decreases (-) from 1991 to 1992. China had a small increase from 1988 to 1991 followed by a large increase from 1991 to 1992 ($(change\_1991, change\_1992) = (small +, large +)$).  Ecuador had a big decrease from 1998 to 1991 followed by a big increase from 1991 to 1992 ($(change\_1991, change\_1992) = (-, +)$).
+
+
+# Sources and attributions
+
+
+
+## International adoptions
+
+The international adoption analysis follows that of "A Casebook For a First Course in Statistics and Data Analysis" by Chatterjee, Handcock, and Simonoff, Wiley, 1995.   The R code was written by Murphy Waggoner and the analysis is applied to the adoption data set from Chatterjee, et. al.  The original source of the dataset is *Ours Magazine*, May/June 1993, published by [Adoptive Families](https://www.adoptivefamilies.com/).  Current data can be obtained from this [government website on intercountry adoption](https://travel.state.gov/content/travel/en/Intercountry-Adoption/adopt_ref/adoption-statistics.html).
+
+## Box-Cox transformations with two parameters
+
+This [article by Rob J. Hyndman](https://robjhyndman.com/hyndsight/transformations/) discusses what to do when the data is skewed and nonnegative but contains zeros.

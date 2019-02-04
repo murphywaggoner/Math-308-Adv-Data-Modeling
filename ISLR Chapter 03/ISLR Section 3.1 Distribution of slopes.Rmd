@@ -1,0 +1,389 @@
+---
+title: "ISLR Section 3.1: Distribution of sample slopes"
+author: "M. E. Waggoner"
+date: "December 29, 2018"
+output: 
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tidyverse)        # required for data processing
+require(modelr)           # a part of the tidyverse that is not
+                          # automatically loaded, but helps in 
+                          # model manipulation
+require(knitr)            # used for kable calls to create tables
+require(broom)            # for nice printout of lm object output
+```
+
+
+# Creating regressions from random samples
+
+
+It is customary to assume that each data set we work with is drawn from a larger population we want to describe.  To understand the distributions of the parameters associated with linear regression, let's create distributions of the parameters from regressions taken from a large number of random samples.
+
+## Variable names
+
+Different disciplines use different terminology for regression variables.  It is important for a data scientist to recognize all possible versions.  Your instructor will variously use *input-output*, *predictor-response*, *explanatory-explained*.
+
+```{r, echo = FALSE}
+vars <- tibble(`x-variable` = c("Explanatory variable", "Independent variable", 
+                              "Exogenous variable", "Treatment", "Regressor",
+                              "Right-hand-side variable", "Predictor",
+                              "Input"),
+               `y-variable` = c("Outcome of interest","Dependent variable",
+                              "Endogenous variable", "Response", "Regressand",
+                              "Left-hand-side variable", "Explained variable",
+                              "Output"))
+
+vars %>% 
+  kable(caption = "Terminology for Regression Variables")
+```
+
+
+
+
+
+## The data set
+
+Consider the wine quality data set from the UCI Machine Learning Repository.  Read in the white wine file using the `read_delim()` function from `readr`, where columns are separated by semicolons.
+
+The data has 4898 observations of 12 real numbered variables.  The response variable is `quality`.  Read more about this data set at the UCE Machine Learning Repository website.
+
+To eliminate bulk in the `tibble` we will select the columns `alcohol` and `quality` only.
+
+```{r}
+white <- read_delim("https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-white.csv", delim = ";")
+
+class(white)
+
+str(white)
+
+white %>% 
+  select(alcohol, quality) ->
+  white
+
+```
+
+## Regression on one random sample
+
+Let's go through the process of saving the parameters associated with regression for one sample of 100 rows from `white` to see what will happen when we loop through 1000 samples below.
+
+### The sample
+
+Draw one (uniformly) random sample of size 100 from `white`.  So that we all get the same "random" sample, we will set the seed for the random number generator.  This is standard practice when conducting reproducible research.
+
+```{r}
+
+set.seed(8675309)
+
+mySample <- sample_n(white, 100)        # used in loop
+
+str(mySample)
+```
+
+### Least squares regression using `lm()`
+
+In this regression, we are interested in how the amount of `alcohol` can predict the sensory `quality` of a white wine.  Thus, we want a linear function of the form $$quality = f(alcohol),$$ which in R-speak is written `quality ~ alcohol`.
+
+The function `lm()` creates an object that contains all the information about a regression line, including the coefficients, residuals, fitted values, statistics, etc.  It also includes the data sent to the `lm()` call, and so this object is self-contained, and we can work with it instead of having to know what the sample was that we sent to it.
+
+```{r}
+
+myModel <- lm(quality ~ alcohol, data = mySample)   # used in loop
+
+class(myModel)
+
+str(myModel)
+```
+
+To see the information contained in the `lm()` object in a more people readable way we can look at the summary.
+
+Note the following statistics:
+
+* a standard error, $t$-value and  $p$-value for the coefficient and the $y$-intercept
+
+* the residual standard error associated with a number of degrees of freedom
+
+* two different $R^2$ values: multiple and adjusted
+
+* an $F$-statistic associated with 2 different degrees of freedom along with a $p$-value
+
+We will want to evaluate the model based on these statistics, along with some regression analysis.  Thus, in order to avoid "black box" thinking, we should know the context of these statistics.
+
+```{r}
+
+summary(myModel)  # output from the model - not easy to use later
+
+tidy(myModel)     # broom package output of parameter statistics
+                  # using tidy - creates a tibble
+
+glance(myModel)   # broom package output of model statistics
+                  # using tidy - creates a tibble
+
+myModel %>% 
+  tidy() %>% 
+  kable()
+
+```
+
+
+#### Looking at the model
+
+There are various helper functions for extracting information from objects of type `lm`.  To plot the line of regression we would like to extract the slope and intercept.  The `coef()` function does this and creates a named list.  To simplify the code for plotting, let's extract those values and save them in `m` and `b`.
+
+
+```{r}
+coef(myModel)
+
+class(coef(myModel))
+
+str(coef(myModel))
+
+m <- coef(myModel)["alcohol"]               # used in loop
+
+b <- coef(myModel)["(Intercept)"]           # used in loop
+
+mySample %>% 
+  ggplot(aes(alcohol, quality)) +
+  geom_point() +
+  geom_abline(intercept = b, slope = m)
+```
+
+#### Pulling out statistics from the `lm` object
+
+```{r}
+myModelSummary <- summary(myModel)
+
+names(myModelSummary)
+
+myModelSummary["coefficients"]
+myModelSummary["fstatistic"]
+```
+
+
+## Regression on many random samples
+
+To understand the context of the various statistics associated with linear regression, we will now generate 50 regression lines and create a `tibble` containing the statistics of interest: 
+
+* slope and intercept
+
+* standard error for each
+
+* whatever else I think I might need
+
+```{r}
+
+set.seed(1930)
+
+
+myStats <- tibble(m = double(),
+                  b = double() )     # initialize a tibble ?needed
+
+for(i in c(1:1000)){
+  
+  mySample <- sample_n(white, 100)       # take a sample
+  myModel <- lm(quality ~ alcohol,       # create the model
+                data = mySample)
+  m <- coef(myModel)["alcohol"]          # same the slope
+  b <- coef(myModel)["(Intercept)"]      # same the intercept
+  
+  myStats %>% 
+    add_row(m = m,
+            b = b) -> myStats
+  
+  
+}
+
+trueModel <- lm(quality ~ alcohol, data = white)     # use the entire data set for the "true" value
+trueSlope <- coef(trueModel)["alcohol"]
+trueIcept <- coef(trueModel)["(Intercept)"]
+
+
+# Plot all point points (x, y) = (alcohol, quality) from white
+# using jitter()
+myPlot <- white %>% 
+  ggplot(aes(x = alcohol, y = quality)) +
+  geom_jitter(size = 0.2)
+
+# plot all the lines of regression
+myPlot +  
+  geom_abline(data = myStats, 
+              aes(slope = m, intercept = b),
+              size = 2,
+              color = "grey",
+              alpha = 0.1) +
+  geom_abline(aes(slope = trueSlope, intercept = trueIcept))
+
+```
+
+
+##### Focusing on the slope of ALL the regression lines
+
+```{r}
+
+myStats %>% ggplot() +
+  geom_freqpoly(aes(x = m, y = ..density..), 
+                 bins = 35, 
+                 alpha = 0.3) +
+  ggtitle("Distribution of the slope for regression lines for many samples ",
+          subtitle = "white wine data set from UCI") +
+          xlab ("m = slope") -> m_hist
+
+class(m_hist)
+
+m_hist
+
+m_hist + 
+  stat_function(fun = dnorm,
+                args = list(mean(myStats$m), sd(myStats$m)),
+                color = "red") 
+
+myStats %>% ggplot(aes(sample = m)) +
+  geom_qq(distribution = qt, 
+          dparams = list(df = 98)) + 
+  geom_qq_line(distribution = qt,  
+               dparams = list(df = 98))
+
+```
+
+#### How does our original sample fit in?
+
+However, we aren't going to do 1000 regressions, we will do just one.  So, how does our first regression done on a sample of 100 observations fit in with these statistics?
+
+Here we plot our slope against the slope of the others.  Assuming (from the QQ plot) that the distribution of all slopes is normal, we will also find the probability that another slope is greater than the slope from the one regression we did.
+
+
+```{r}
+set.seed(8675309) # So that we know we get the same values
+
+mySample <- sample_n(white, 100)      
+myModel <- lm(quality ~ alcohol, data = mySample)   
+mySlope <- coef(myModel)["alcohol"]               
+myIcept <- coef(myModel)["(Intercept)"]    
+
+m_hist + 
+  geom_vline(xintercept = mySlope) +
+  geom_text(aes(label = "m from 1st regression", 
+                x = mySlope, 
+                y = 5),
+            hjust = "left")
+
+m_avg <- mean(myStats$m)
+m_sd <- summary(myModel)$coefficients[["alcohol", "Std. Error"]]
+m_sd
+
+m_z <- (mySlope - 0)/m_sd
+prob_norm <- 1 - pnorm(m_z)
+prob_studentt <- 1 - pt(m_z, df = 98)
+
+
+mySlope; m_sd^2; m_z; prob_norm; prob_studentt; summary(myModel)$coefficients
+
+m_z
+
+```
+
+
+
+
+
+# Exercises
+
+1. What does the `R` function `str()` do?  The function `class()`?
+
+1. Why is the `white` data in horizontal strips?
+
+1. What is the purpose of `set.seed()` in this context?
+
+1. Explain when to use a pipe ( %>% ) and a layer ( + ).  
+What is the difference and when do we use each?
+
+1. Explain the difference between `a -> b` and `b <- a`.
+
+1.  What is the advantage of storing a `ggplot` object?
+
+
+```{r}
+set.seed(1951)
+data <- tibble(x = runif(500, min = -10, max = 10), 
+               y = runif(500, min = -10, max = 10))
+
+
+
+graph <- data %>% 
+  ggplot(aes(x, y)) +
+  geom_jitter()
+
+graph
+
+
+myStats <- tibble(index = integer(),
+                  m = double(),
+                  b = double() )     # initialize a tibble
+for(i in 1:1){
+  mySample <- sample_n(data, 10)
+  myModel <- lm(y ~ x, data = mySample)
+  m <- coef(myModel)["x"]          # same the slope
+  b <- coef(myModel)["(Intercept)"]      # same the intercept
+    myStats %>% 
+    add_row(index = i,
+            m = m,
+            b = b) -> myStats
+}
+
+# plot all the lines of regression
+data %>% 
+  ggplot() +
+  geom_abline(data = myStats, 
+              aes(slope = m, intercept = b),
+              size = 1,
+              color = "grey",
+              alpha = 0.3) + 
+  geom_point(aes(x, y), 
+             alpha = 0.2) 
+
+str(myModel)
+
+
+
+
+
+myExamples <- read_csv("RegressionExamples.csv")
+
+myExStats <- tibble(id = double(),
+                  m = double(),
+                  b = double() )     # initialize a tibble
+for(i in 1:4){
+  mySample <- filter(myExamples, str_detect(id, as.character(i)))
+  myModel <- lm(y ~ x, data = mySample)
+  m <- coef(myModel)["x"]          # same the slope
+  b <- coef(myModel)["(Intercept)"]      # same the intercept
+    myExStats %>% 
+    add_row(id = i,
+            m = m,
+            b = b) -> myExStats
+}
+
+myExStats
+
+
+myExamples %>% 
+  ggplot(aes(x, y)) +
+  geom_jitter(data = data,
+             aes(x,y),
+             alpha = 0.1, 
+             shape = 1) +
+  geom_point(aes(color = id),
+             size = 2) + 
+  geom_abline(data = myExStats,
+              aes(slope = m, 
+                  intercept = b))  +
+  facet_wrap(~id) + 
+  theme(legend.position="none") + 
+  ggtitle("Four examples of lines fit to a sample of 10 points",
+        "where there is no linear relationship between x and y in the population, shown in gray")
+
+```
+

@@ -1,0 +1,263 @@
+---
+title: "ISLR Chap 3 Notes"
+author: "M. E. Waggoner"
+date: "February 3, 2019"
+output: 
+  html_document:
+    toc: yes
+    pandoc_args: [
+      "--number-sections",
+      "--number-offset=2"
+    ]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tidyverse)
+require(texreg)
+library(ggfortify)
+
+```
+
+
+The statistics behind most machine learning assumes that the data we have is just one sample of a much larger population.  Thus, when we calculate means and standard deviations, we are calculating them from a sample, i.e., 
+$$\displaystyle\bar{x} = \frac{1}{n}\Sigma_{i-1}^n x_i.$$
+Sample statistics methods are what are behind the hypothesis testing and confidence intervals we will use.
+
+# Simple Linear Regression
+
+$y$ is aproximately a linear function of $X$, but unknown
+\begin{align}
+Y \approx \beta_0 + \beta_1 X
+\end{align}
+
+Since we don't know the slope and intercept, we find approximations for them using the training data.
+\begin{align}
+\hat{y} = \hat{\beta}_0 + \hat{\beta}_1 x
+\end{align}
+
+## Estimating the Coefficients
+
+$i$th Residual.  Note that this is the difference between the actual value and the estimated linear relationship, which is not the same as $\epsilon_i$, which is the difference between the actual value and the true line.
+\begin{align*}
+e_i = y_i - \hat{y}_i 
+\end{align*}
+
+Residual sum of squares = what is minimized by least squares.  I  said that MSE was minimized by least squares, and it is since $MSE = RSS/n$. 
+\begin{align}
+	\mathrm{RSS} =& e_1^2	+ e_2^2 + \cdots + e_n^2 \nonumber \\ 
+	=& \left( y_1 - \hat{y}_1\right)^2 + \left( y_2 - \hat{y}_2\right)^2 + \cdots + \left( y_n - \hat{y}_n\right)^2 \\
+	=& \Sigma_{i-1}^n \left( y_i - \hat{y}_i\right)^2 \nonumber
+\end{align}
+
+Least squares coefficients estimates that minimize RSS where $\bar{x}$ and $\bar{y}$ as calculated by `lm()`. 
+\begin{align}
+\hat{\beta}_1 =& \frac{\Sigma_{i = 1}^{n} \left(x_i - \bar{x}\right)\left(y_i - \bar{y}\right)}
+                    {\Sigma_{i = 1}^{n} \left(x_i - \bar{x}\right)^2} \nonumber \\
+\hat{\beta}_0	=& \bar{y} - \hat{\beta}_1 \bar{x},
+\end{align}
+where $\bar{x}$ and $\bar{y}$ are means of $x$ and $y$, respectively.
+
+
+
+
+
+## Assessing the Accuracy of the Coefficient Estimates
+
+These statistics assess the accuracy of the parameters of slope and intercept, and do not assess the accuracy of the model.  In other words, these statistics are evaluating our ability to use the estimates of the slope and intercept, but they do not tell us whether a linear model is a good fit to the data.
+
+True linear relationship between $X$ and $Y$
+\begin{align}
+	Y = \beta_0 + \beta_1 X + \epsilon
+\end{align}
+
+The standard error (SE) of a statistic (usually an estimate of a parameter) is the standard deviation of its sampling distribution or an estimate of that standard deviation.
+
+Standard error of a sample mean where $\sigma^2 = \mathrm{Var}(x)$ for a population $X$
+\begin{align}
+	\mathrm{Var}\left(\hat{\mu}\right) = \mathrm{SE}\left(\hat{\mu}\right)^2 = \frac{\sigma^2}{n}
+\end{align}
+
+Standard error of estimates of linear coefficients where $\sigma^2 = \mathrm{Var}(\epsilon)$ are calculated by `lm()`.
+\begin{align}
+	\mathrm{SE}\left(\hat{\beta}_0\right)^2 & = 
+		\sigma^2\left[ 
+			\frac{1}
+					 {n} + 
+			\frac{\bar{x}^2}
+					 {\Sigma_{i - 1}^n\left(x_i - \bar{x}^2\right)} \right] 
+			\nonumber \\
+	\mathrm{SE}\left(\hat{\beta}_1\right)^2 & = 
+		 \frac{\sigma{x}^2}
+					{\Sigma_{i - 1}^n \left(x_i - \bar{x}^2\right)}
+\end{align}
+
+We will use the standard errors in two ways.  In practice, usually one or the other is used.
+
+### Confidence intervals
+
+There is approximately a 95\% chance that the true value of the slope $\beta_1$ lies in the interval
+\begin{align}
+	\left[ 	\hat{\beta}_1 - 2 \mathrm{SE}\left( \hat{\beta}_1 \right),
+					\hat{\beta}_1 + 2 \mathrm{SE}\left( \hat{\beta}_1 \right) 
+					\right].
+\end{align}
+If the confidence interval for the slope contains 0, this is an indication that the slope very well might be 0 and that $Y$ does not depend linearly on $X$.
+
+There is approximately a 95% chance that the true value of the intercept $\beta_0$ lies in the interval
+\begin{align}
+	\left[ 	\hat{\beta}_0 - 2 \mathrm{SE}\left( \hat{\beta}_0 \right),
+					\hat{\beta}_0 + 2 \mathrm{SE}\left( \hat{\beta}_0 \right) 
+					\right].
+\end{align}
+Generally, we will use a confidence level of 95%, but in practice the confidence level will be determined by the application, the client, and the industry.
+
+### Hypothesis testing
+
+A common hypothesis test of linear relationships tests the null hypothesis
+\begin{align}
+	H_0&: \text{There is no relationship between }X\text{ and }Y\nonumber \\
+	H_0&: \beta_1 = 0
+\end{align}
+versus the alternate hypothesis
+\begin{align}
+	H_1&: \text{There is a relationship between }X\text{ and }Y\nonumber \\
+	H_1&: \beta_1 \ne 0
+\end{align}
+using the $t$-statistic
+\begin{align}
+	t = \frac{\hat{\beta}_1 - 0}{\mathrm{SE}\left(\hat{\beta}_1\right)},
+\end{align}
+which measures the number of standard deviations that $\hat{\beta}_1$ is away from the mean 0, because if there is no relationship between $X$ and $Y$, then $t$ will have a $t$-distribution with $df = n - 2$, that is, the degrees of freedom = the number of variables $-$ the number of parameters.
+
+## Assessing the Accuracy of the Model
+
+These statistics allow us to assess the accuracy of the model; that is, they help us know whether a linear model was a good choice.
+
+### Residual Standard Error
+
+A small RSE *relative to the data* indicates that the actual data are close to the predictions, and we can say the model fits the data well.  
+
+A large RSE *relative to the data* indicates that the actual data are not close to the predictions, and we can say the model does not fit the data well.
+
+The *residual standard error* is
+\begin{align}
+	\mathrm{RSE} &= 
+		\sqrt{\frac{1}{n-2}\mathrm{RSS}}\nonumber \\
+		&=\sqrt{\frac{1}{n-2}\Sigma_{i=1}^n\left(y_i - \hat{y}_i\right)^2} \\
+		&\approx  		\mathrm{Var}(\epsilon)^2 \nonumber
+\end{align}
+where the *residual sum of squares* is
+\begin{align}
+	\mathrm{RSS} =\Sigma_{i=1}^n\left(y_i - \hat{y}_i\right)^2. 
+\end{align}
+
+
+
+### $R^2$ Statistic
+
+The formula for $R^2$ is
+\begin{align}
+	R^2 = \frac{\mathrm{TSS} - \mathrm{RSS}}{\mathrm{RSS}},
+\end{align}
+where the *total sum of squares* is
+
+$$
+\begin{align*}
+	\mathrm{TSS} =\Sigma_{i=1}^n\left(y_i - \bar{y}\right)^2. 
+\end{align*}
+$$
+
+
+The *correlation* of $X$ and $Y$ is
+\begin{align}
+r = \mathrm{Cor}(X, Y) = \frac{\Sigma_{i = 1}^n\left(x_i - \bar{x}\right)\left(y_i - \bar{y}\right)}
+        {\sqrt{\Sigma_{i = 1}^n\left(x_i - \bar{x}\right)}
+					\sqrt{\Sigma_{i = 1}^n\left(y_i - \bar{y}\right)}}
+\end{align}
+and in simple linear regression $$r^2 = R^2.$$
+
+#### Examples:  RSE versus $R^2$
+
+Or, Residual Squared Error vs Coefficient of Determination. 
+
+Consider this simulated data.
+
+```{r echo = FALSE}
+set.seed(111)
+myData <- tibble(x = runif(n =100, 
+                           min = 1, 
+                           max = 100),
+                 y1 = 20*x+ 50 + 200*rnorm(n = 100 ),
+                 y2 = x^3/600 +20*x - 350 + 
+                   30*sample(-1:1,100,replace=T) ,
+                 y3 = 15*x*sample(0:1,100,replace=T) +10*x+ 50 + 
+                   100*rnorm(n = 100),
+                 y4 = 20*x + 50 + 400*rnorm(n = 100 ) )
+
+myData %>% 
+  gather(key = "dataset", value = "y", -x) %>% 
+  ggplot(aes(x = x, y = y)) +
+  geom_point() + 
+  stat_smooth(method = "lm", col = "red") +
+  facet_wrap(facets = vars(dataset))
+
+lm1 <- lm(y1 ~ x, data = myData)
+lm2 <- lm(y2 ~ x, data = myData)
+lm3 <- lm(y3 ~ x, data = myData)
+lm4 <- lm(y4 ~ x, data = myData)
+
+mean_y <- myData %>% 
+  summarize(meany1 = mean(y1),
+          meany2 = mean(y2),
+          meany3 = mean(y3),
+          meany4 = mean(y4))
+
+mean_y
+
+screenreg(list(lm1, lm2, lm3, lm4))
+
+
+
+```
+
+
+## Looking to the future:  Section 3.3.3
+
+As we can see from the previous section, the values of $R^2$ and RSE do not tell the whole story.  We would look at a variety of analyses to help us understand the structure of the data and find a good model.
+
+One such analysis is to look at the residuals.  If our model accounts for all variation in $Y$ that is based on $X$,  then the residuals $e_i$ should be a good estimate for the errors $\epsilon_i$.  Thus, the residuals should be random with a normal distribution and have not other structure.  If they do not have these qualities, then there is more to the relationship of $X$ and $Y$ than we accounted for in the regression.
+
+There are many ways to look the distribution of the residuals.  Here we look at their distribution as a scatterplot and a normal QQ plot.  These are created automatically when we call `lm()`.  The command `ggfortify::autoplot()` is one way to view the data, but there are many others.
+
+The first model `lm1` shows exactly what the residuals should look like if the linear model captured all the variation in $Y$ that depends on $X$.  The QQ plot shows that the distribution is normal.  The scatterplot of the residuals shows that about 2/3 of the points are within one standard deviation of the mean, and almost all are within 2 standard deviations.  The blue fitted line should be the line $e = 0$ if the residuals are centered around 0, and we see here that it is close.
+
+
+
+```{r}
+autoplot(lm1, which = c(2, 1), ncol = 2, label.size = 3)
+```
+
+The second model `lm2` shows poor results in the residual analysis, and there is clearly a relationship between $X$ and $Y$ that was not capture by the linear model. The QQ plot shows that the residuals are not normally distributed.  The scatterplot of the residuals has a clear U-shaped pattern, and the residuals are not random.  In this case, it would be good to try a quadratic rather than linear model.
+
+
+
+```{r}
+autoplot(lm2, which = c(2, 1), ncol = 2, label.size = 3)
+```
+
+The third model `lm3` also shows there is a relationship between $X$ and $Y$ that was not capture by the linear model. This time the scatterplot of the residuals has a sideways funnel shape, but the blue fitted line still hugs the horizontal axis.  In this case, it would be good to a Box-Cox transformation, possibly a log transformation.  
+
+
+
+```{r}
+autoplot(lm3, which = c(2, 1), ncol = 2, label.size = 3)
+```
+
+The fourth model `lm4` is similar to the first model:  the residuals are random and normally distributed.
+
+
+
+```{r}
+autoplot(lm4, which = c(2, 1), ncol = 2, label.size = 3)
+```

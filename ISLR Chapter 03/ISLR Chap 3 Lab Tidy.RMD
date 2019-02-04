@@ -22,9 +22,12 @@ Don't cherry-pick your statistical analyses.
 
 ## Libraries
 
-In this document we will use the `require()` function (instead of the `library()` function) to load *libraries* for use in the `R` code below.  In this chunk of code, called `setup`, we load the packages (`tidyverse`, `knitr`, `broom`, `gridExtra`) for the functions we will use and the packages `ISLR` and `MASS` for the data sets.
+In this chunk of code, called `setup`, we load the packages (`tidyverse`, `knitr`, `broom`, `gridExtra`) for the functions we will use and the packages `ISLR` and `MASS` for the data sets. In this document we will use the `require()` function (instead of the `library()` function) to load *libraries* for use in the `R` code below.  
 
-Note that the `setup` chunk uses parameters to suppress the code, messages, and warnings.  This is so that these non-people readable items are not in the output.  The parameters (i.e., options) are only for this chunk as they are within the chunk's header.
+Note that the `setup` chunk uses parameters to suppress the code, messages, 
+and warnings.  This is so that these non-people readable items are not in 
+the output.  The parameters (i.e., options) are only for this chunk as 
+they are within the chunk's header.
 
 The option `echo = TRUE` is set for all chunks in the RMarkdown file.  If we want to suppress the code from being echoed for any chunk, we would need to put the parameter `echo = FALSE` in that chunk.
 
@@ -70,8 +73,8 @@ Let's take a quick look at the data.  There is some evidence for non-linearity i
 
 ```{r}
 
-str(Boston)
-Boston <- as_tibble(Boston)    # create a tibble from data frame Boston
+str(Boston)                    # Boston is a non-tibble data fram
+Boston <- as_tibble(Boston)    # change Boston to a tibble
 str(Boston)
 
 
@@ -94,7 +97,7 @@ To do this we need to know how to define *mathematical functions* in `R`.  The n
 $$y \sim x.$$
 We will talk about how to create more complicated formulae later, but for now we are only interested in linear formulae, and $y \sim x$ is interpreted by `R` as $$y = \beta_0 + \beta_1 x.$$  Thus, to create a linear model of `medv` as a function of `lstat`, we need the `R` formula $$medv \sim lstat.$$
 
-More information on R formulae can be found at [Dr. Waggoner's Math 308 GitHub repository](https://github.com/murphywaggoner/Math-308-Adv-Data-Modeling/blob/master/ISLR%20R%20Formulae.Rmd).
+More information on R formulae can be found at [Dr. Waggoner's Math 308 GitHub repository](https://github.com/murphywaggoner/Math-308-Adv-Data-Modeling/blob/master/Chapter%2003/ISLR%20Chap%203R%20Formulae.Rmd).
 
 ### Generating the linear model and associated statistics
 
@@ -106,7 +109,7 @@ model_SL <- lm(medv~lstat, data=Boston)
 summary(model_SL)
 ```
 
-Recall that we can extract and save the information about the model using the `broom` functions `tidy()` and `glance()`, and then make them pretty with `kable()`.  
+We can extract and save the information about the model using the `broom` functions `tidy()` and `glance()`, and then make them pretty with `kable()`.  
 
 These are the **parameter statistics**, their symbols and calculations in ISLR.
 
