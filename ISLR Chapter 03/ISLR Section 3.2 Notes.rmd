@@ -112,7 +112,6 @@ tidyF <- function(lmobj) {
          )
   }
 
-tidyF(lmAll)
 ```
 
 #### Deciding on Important Variables
