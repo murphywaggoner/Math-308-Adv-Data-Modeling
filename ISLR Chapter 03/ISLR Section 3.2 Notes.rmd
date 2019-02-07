@@ -1,0 +1,164 @@
+---
+title: "ISLR Chap 3 Notes"
+author: "M. E. Waggoner"
+date: "February 6, 2019"
+output: 
+  pdf_document:
+    toc: yes
+    toc_depth: 5
+    pandoc_args: [
+      "--number-sections",
+      "--number-offset=2"
+    ]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      fig.width = 4 ,
+                      fig.height = 3)
+require(tidyverse)    # various
+require(texreg)       # screenreg()
+require(ggfortify)    # autoplot()
+require(knitr)        # kable()
+require(broom)        # tidy()
+
+options(digits = 4)
+```
+
+
+$\setcounter{section}{2}$
+
+#  Linear Regression
+
+$\setcounter{subsection}{1}$
+$\setcounter{equation}{18}$
+
+Note:  The section numbers of this document match up with ISLR.  The equation numbers match up with the section, but you need to append "3." to the number.
+
+## Multiple Linear Regression
+
+The multiple linear regression model takes the form
+\begin{align}
+Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \cdots + \beta_p X_p + \epsilon.
+\end{align}
+Since
+\begin{align}
+\frac{\partial Y}{\partial X_j} = \beta_j \nonumber
+\end{align}
+ we interpret $\beta_j$ as the average effect on $Y$ of a one unit increase in $X_j$, *holding all other predictors fixed.*
+
+$\stepcounter{equation}$
+
+### Estimating the Regression Coefficients
+
+We estimate the true value of $Y$ with
+\begin{align}
+\hat{Y} = \hat{\beta_0} + \hat{\beta_1} X_1 + \hat{\beta_2} X_2 + \cdots + \hat{\beta_p} X_p
+\end{align}
+where the parameters are chosen to minimize 
+\begin{align}
+\displaystyle RSS = 
+\Sigma_{i = 1}^n \left(y_i - \hat{y_i}\right)^2.
+\end{align}
+
+#### Example: Coefficients of simple vs. multiple linear regression
+
+Returning to the `mtcars` data, here we show the coefficients found from three simple linear regressions of `mpg` against `cyl`, `disp`, and `weight` and those from a multiple regression on all three variables at once.
+
+```{r}
+lmCylinders <- lm(mpg ~ cyl, data = mtcars)
+lmDisplacement <- lm(mpg ~ disp, data = mtcars)
+lmWeight <- lm(mpg ~ wt, data = mtcars)
+lmAll <- lm(mpg ~ cyl + disp + wt, data = mtcars)
+
+screenreg(list(lmCylinders, lmDisplacement, lmWeight, lmAll),
+          custom.model.names = c("Cylinders", "Displacement", "Weight",
+                                 "All")
+)
+
+```
+
+In the first three columns we regress `mpg` against each of `cyl`, `disp` and `wt` once at a time *ignoring* the other two variables.  In the last column we regress `mpg` against all three by *fixing* two at a time and letting the third vary.  The processes of *ignoring* and *fixing* result in different slopes for each variable in the two models.
+
+### Some Important Questions
+
+#### Is there a relationship between the Response and Predictors?
+
+That is, is at least one of the predictors $X_1, X_2, \ldots, X_p$ useful in predicting the response?
+
+The null and alternate hypotheses are 
+\begin{align*}
+H_0&: \beta_1 = \beta_2 = \cdots = \beta_p = 0 \\
+H_1&: \text{at least one } \beta_j \text{ is non-zero}
+\end{align*}
+This hypothesis test is performed by computing the $F$-statistic
+\begin{align}
+F = \frac{(\mathrm{TSS}- \mathrm{RSS})/p}{\mathrm{RSS}/(n - p - 1)}.
+\end{align}
+Based on the computation of $F$, there is evidence that we should reject the null hypothesis if $F > 1$.  However, how much greater than one depends on the number of observations and the number of variables.  As opposed to the $t$-statistic where there is a direct relationship between $t$ and $p$, the $p$ depends on more than just the $F$-statistic.  Thus, to draw a conclusion from the hypothesis test using $F$, we should rely on the value of $p$.
+
+
+```{r}
+# A function to extract and print the F-statistic
+tidyF <- function(lmobj) {
+  stats <- summary(lmobj)$fstatistic
+  prob <- 1- pf(stats[["value"]], 
+                df1 = stats[["numdf"]], 
+                df2 = stats[["dendf"]])
+  tibble(`F-statistic` = c(stats[["value"]]),
+         df1 = c(stats[["numdf"]]), 
+         df2 = c(stats[["dendf"]]),
+         `p-value` = c(prob)
+         )
+  }
+
+tidyF(lmAll)
+```
+
+#### Deciding on Important Variables
+
+Do all the predictors help to explain $Y$, or is only a subset of the predictors useful?  There are several methods of variable selection, but we will reserve that discussion for Chapter 6.
+
+#### Model fit
+
+How well does the model fit the data?  This analysis is the same as for simple linear regression:  $R^2$ gives the fraction of the variance in $Y$ that can be explained by the linear equation, and $\mathrm{RSE}/\bar{y}$ gives relative error in the model.  However there is a caveat for each of these statistics since they both improve as the number of variables increases.
+
+When we get to Chapter 6, we will discover that the value of $R^2$ will always increase if we add another variable to the linear model, even if those variables are only weakly associated with the response variable.  Adding variables increases the flexibility of the model allowing for it to explain more of the variation in the response variable, but this leads to overfitting the model.  We will understand that better in Chapter 5 when we look at cross-validation.
+
+$\stepcounter{equation}$
+
+The residual standard error for multiple regression is 
+\begin{align}
+\mathrm{RSE} = \sqrt{\frac{\mathrm{RSS}}{n - p - 1}}.
+\end{align}
+A small (relative) RSE is good, but note that RSE decreases as $p$ increases regardless of what happens to the RSS.
+
+#### Predictions
+
+Given a set of predictor values, how accurate is our prediction of the response?
+
+Predictions have three types of uncertainty.
+
+1. *Reducible error*:  The coefficients are only estimates.  The inaccuracy in these estimates was measured by the confidence intervals for each parameter.
+
+2. *Bias*:  It is unlikely that the true $f(X)$ is linear, and our model bias adds to the uncertainty of predictions.  While we will consider  bias as we are doing model selection, we will not consider is when predicting values based on our model.
+
+3. *Irreducible error*:  The true function $f(X)$ contains errors that we cannot capture in the model.  This data scatter adds a third layer of uncertainty.
+
+Given so much uncertainty, how can we make predictions?  Instead of predicting a specific value, we predict a range of values.  The width of that range depends on the type of prediction we are making.
+
+* **Prediction Intervals**  A prediction interval is an estimate of the *one* response to a new observation.  A prediction interval must take the irreducible error into account.  That is, the error term in the true function is unknown and it's variation does not depend on $X$, greatly increasing the uncertainty of specific predictions.
+
+* **Confidence Intervals** A confidence interval is an estimate of the *expected* response to a new observation.  The expected response is an average, and thus has a narrower range.  Think of it this way:  is it easier to predict the height of the next college student who walks through the door or to predict the average height of a class of 30 students?  A single student could be quite tall or short, but the average of 30 heights will fall in a narrower range.
+
+Thus, prediction intervals are wider than confidence intervals.  When we use `geom_smooth(method = "lm"), the graph has an interval for each value of $x$.  Does this show the prediction or the confidence interval?
+
+```{r}
+mtcars %>% ggplot(aes(x = wt, y = mpg)) +
+  geom_smooth(method = "lm")
+```
+
+
+
+
+
