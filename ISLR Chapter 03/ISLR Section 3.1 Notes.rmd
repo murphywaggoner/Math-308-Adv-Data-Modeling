@@ -8,13 +8,11 @@ output:
     pandoc_args: [
       "--number-sections",
       "--number-offset=2"
+      "--number-offset=3"
     ]
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE,
-                      fig.width = 4 ,
-                      fig.height = 3)
 require(tidyverse)    # various
 require(texreg)       # screenreg()
 require(ggfortify)    # autoplot()
@@ -27,7 +25,9 @@ options(digits = 4)
 
 $\setcounter{section}{2}$
 
-# Simple Linear Regression
+# Linear Regression
+
+## Simple Linear Regression
 
 Note:  The section numbers of this document match up with ISLR.  The equation numbers match up with the section, but you need to append "3." to the number.
 
@@ -47,7 +47,7 @@ Since we don't know the slope and intercept, we find approximations for them usi
 \hat{y} = \hat{\beta}_0 + \hat{\beta}_1 x
 \end{align}
 
-## Estimating the Coefficients
+### Estimating the Coefficients
 
 $i$th Residual.  Note that this is the difference between the actual value and the estimated linear relationship, which is not the same as $\epsilon_i$, which is the difference between the actual value and the true line.
 \begin{align*}
@@ -73,7 +73,7 @@ where $\bar{x}$ and $\bar{y}$ are means of $x$ and $y$, respectively.
 
 
 
-## Assessing the Accuracy of the Coefficient Estimates
+### Assessing the Accuracy of the Coefficient Estimates
 
 These statistics assess the accuracy of the parameters of slope and intercept, and do not assess the accuracy of the model.  In other words, these statistics are evaluating our ability to use the estimates of the slope and intercept, but they do not tell us whether a linear model is a good fit to the data.
 
@@ -90,6 +90,11 @@ Standard error of a sample mean where $\sigma^2 = \mathrm{Var}(x)$ for a populat
 \begin{align}
 	\mathrm{Var}\left(\hat{\mu}\right) = \mathrm{SE}\left(\hat{\mu}\right)^2 = \frac{\sigma^2}{n}
 \end{align}
+
+In general, the standard deviation of a distribution $x$ is approximated by the standard error of $x$.
+\begin{align*}
+	\mathrm{Var}(x) = \sigma(x)\approx\mathrm{SE}\left(\hat x\right)^2 
+\end{align*}
 
 Standard error of estimates of linear coefficients where $\sigma^2 = \mathrm{Var}(\epsilon)$ are calculated by `lm()`.
 \begin{align}
@@ -109,7 +114,7 @@ $\stepcounter{equation}$
 
 We will use the standard errors in two ways.  In practice, usually one or the other is used.
 
-### Confidence intervals
+#### Confidence intervals
 
 There is approximately a 95\% chance that the true value of the slope $\beta_1$ lies in the interval
 \begin{align}
@@ -127,9 +132,9 @@ There is approximately a 95% chance that the true value of the intercept $\beta_
 \end{align}
 Generally, we will use a confidence level of 95%, but in practice the confidence level will be determined by the application, the client, and the industry.
 
-#### Example: How large is the effect?
+##### Example: How large is the effect?
 
-Consider the `mtcars` dataset that comes with base R.  Is the miles per gallon `mpg` a car can get a linear relationship of `disp`?  If so, how large is the effect?  That is, what is the change in `disp` for an increase or decrease of 1 `mpg`?
+Consider the `mtcars` dataset that comes with base R.  Is the miles per gallon `disp` a car can get a linear relationship of `mpg`?  If so, how large is the effect?  That is, what is the change in `mpg` for an increase or decrease of 1 `disp`?
 
 ```{r echo = FALSE}
 mtcars %>% 
@@ -152,7 +157,7 @@ We can view the coefficients and their standard errors using the `tidy()` functi
 kable(tidy(lmCar))
 ```
 
-The estimate of the slope is $\hat\beta_1 = `r m`$ with $\mathrm{SE}\left(\hat\beta_1\right) = `r SEm`$.  Thus, there is a 95% chance that the true slope is in the interval $[`r lowm`, `r highm`]$. This interval is relatively narrow since $\frac{\hat\beta_1}{\hat\beta_1} = `r SEm/m`$ is small.  This interval is "far" from zero since it does not contain zero and the distance from the interval to zero relatively large since $\left|\frac{\hat\beta_1 + \mathrm{SE}\left(\hat\beta_1\right)}{\mathrm{SE}\left(\hat\beta_1\right)}\right| = `r abs((SEm + m)/SEm)`$ is large.
+The estimate of the slope is $\hat\beta_1 = `r m`$ with $\mathrm{SE}\left(\hat\beta_1\right) = `r SEm`$.  Thus, there is a 95% chance that the true slope is in the interval $[`r lowm`, `r highm`]$. This interval is relatively narrow since $\frac{\mathrm{SE}\left(\hat\beta_1\right)}{\hat\beta_1} = `r SEm/m`$ is small.  This interval is "far" from zero since it does not contain zero and the distance from the interval to zero relatively large since $\left|\frac{\hat\beta_1 + \mathrm{SE}\left(\hat\beta_1\right)}{\mathrm{SE}\left(\hat\beta_1\right)}\right| = `r abs((SEm + m)/SEm)`$ is large.
 
 The estimate of the intercept is $\hat\beta_0 = `r b`$ with $\mathrm{SE}\left(\hat\beta_0\right) = `r SEb`$.  Thus, there is a 95% chance that the true intercept is in the interval $[`r lowb`, `r highb`]$. 
 
@@ -168,7 +173,7 @@ kable(confint(lmCar))
 
 So how large is the effect of `mpg` on `disp`? The change in `disp` given a change in `mpg` is $$\frac{dy}{dx} = \frac{d}{dx}\left( \beta_1 x + \beta_0 \right) = \beta_1.$$ Thus, there is a change of $-0.0417 \pm 0.0047$ miles per gallon for each change of 1 unit of displacement.
 
-### Hypothesis testing
+#### Hypothesis testing
 
 A common hypothesis test of linear relationships tests the null hypothesis
 \begin{align}
@@ -186,7 +191,7 @@ using the $t$-statistic
 \end{align}
 which measures the number of standard deviations that $\hat{\beta}_1$ is away from the mean 0, because if there is no relationship between $X$ and $Y$, then $t$ will have a $t$-distribution with $df = n - 2$, that is, the degrees of freedom = the number of observations $-$ the number of parameters.
 
-#### Example: Is there a relationship?
+##### Example: Is there a relationship?
 
 Continuing the example of `mtcars`, we can ask if there a relationship between miles per gallon and engine displacement.  For simple linear regression, this question can be answered with some level of confidence using a hypothesis test.  The null hypothesis is that there is no relationship, and it is assumed until we have evidence to the contrary.  The alternate hypothesis is what we will believe if there is statistical evidence.
 \begin{align*}
@@ -214,11 +219,11 @@ We can demonstrate that the distribution of all possible intercepts is approxima
 $$ t = \frac{\hat{\beta}_0 - 0}{\mathrm{SE}\left(\hat{\beta}_0\right)}  = \frac{`r b`}{`r SEb`} = `r b/SEb`. $$
 At a significance level of 5%, we will reject the null hypothesis if the area beyond this $t$-statistic is less than 5%.  That is, we reject the null hypothesis if $$p = P(|t| > |24.07|) < 5\%.$$  The $t$-distribution for the intercept is the same as for the slope.   From the output of `lm()`, we see that $p = 0 < 5\%$ for the intercept.  Therefore, at the 5% significance level we can conclude that the `mpg`-intercept is not zero.  However, we do not know yet whether we have made a good estimate of the intercept or not.
 
-## Assessing the Accuracy of the Model
+### Assessing the Accuracy of the Model
 
 These statistics allow us to assess the accuracy of the model; that is, they help us know whether a linear model was a good choice.
 
-### Residual Standard Error
+#### Residual Standard Error
 
 A small RSE *relative to the data* indicates that the actual data are close to the predictions, and we can say the model fits the data well.  
 
@@ -238,7 +243,7 @@ where the *residual sum of squares* is
 
 
 
-### $R^2$ Statistic
+#### $R^2$ Statistic
 
 The formula for $R^2$ is
 \begin{align}
@@ -261,13 +266,13 @@ r = \mathrm{Cor}(X, Y) = \frac{\Sigma_{i = 1}^n\left(x_i - \bar{x}\right)\left(y
 \end{align}
 and in simple linear regression $$r^2 = R^2.$$
 
-#### Examples:  RSE versus $R^2$
+##### Examples:  RSE versus $R^2$
 
 Or, Residual Squared Error vs Coefficient of Determination. 
 
 Consider this simulated data.
 
-```{r echo = FALSE}
+```{r echo = FALSE, fig.height=5}
 set.seed(111)
 myData <- tibble(x = runif(n =100, 
                            min = 1, 
@@ -305,7 +310,7 @@ screenreg(list(lm1, lm2, lm3, lm4))
 
 ```
 
-#### Example: How strong (i.e., accurate) is the relationship?
+##### Example: How strong (i.e., accurate) is the relationship?
 
 ```{r echo = FALSE}
 ybar <- mean(mtcars$disp)
@@ -325,7 +330,7 @@ screenreg(list(lmCar))
 
 
 
-## Looking to the future:  Section 3.3.3
+### Looking to the future:  Section 3.3.3
 
 As we can see from the previous section, the values of $R^2$ and RSE do not tell the whole story.  We would look at a variety of analyses to help us understand the structure of the data and find a good model.
 
