@@ -112,6 +112,7 @@ tidyF <- function(lmobj) {
          )
   }
 
+kable(tidyF(lmAll))
 ```
 
 #### Deciding on Important Variables

@@ -8,7 +8,6 @@ output:
     toc_depth: 5
     pandoc_args: [
       "--number-sections",
-      "--number-offset=2"
       "--number-offset=3"
     ]
 ---
