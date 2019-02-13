@@ -210,9 +210,9 @@ str(flare$Distr)
 
 ```
 
-A factor variable with $n$ levels will need $n-1$ dummy variables.  When `lm()` or other commands create dummy variables for factors, how can we predict what those will be?
+A factor variable with $n$ levels will need $n-1$ dummy variables, and `lm()` as well as other R functions will create the dummy variables for us.
 
-The `contrasts()` function will provide the answers.  All levels are along the left side, the dummy variables along the top, and the values of each dummy variable that result in each level.
+The `contrasts()` function illustrates what `lm()` will do.  All levels are along the left side, the dummy variables along the top, and the values of each dummy variable that result in each level.  The variable missing from the  dummy variables is the *baseline*.  Baselines are arbitrary and may vary from function to function or one installation of R to another.
 
 ```{r}
 kable(contrasts(flare$Activity), caption = "Activity")
@@ -252,3 +252,38 @@ Assuming that `Activity` and `Evolution` are fixed:
 
 
 ### Extensions of the Linear Model
+
+#### Removing the Additive Assumption
+
+#### Non-linear Relationships
+
+### Potential Problems
+
+#### Non-linearity of the Data
+
+If the discernible patterns in the data are not captured by the model, then the residuals will exhibit a non-random pattern.  If the residuals exhibit one of these behaviors, we should work toward a different model and the behaviors of the residuals should help us know what that model should do.
+
+The diagnostic tools for observing non-linearity of the data are residual plots; that is, plots that show or analyze points of the form
+
+\begin{align*}
+(x, y- \hat{y})& \text{for simple linear regression and} \\
+(\hat{y}, y - \hat{y})& \text{for multiple linear regression.}
+\end{align*}
+
+* Simple remedy: transform $X$ using powers, logs, roots, exponentials
+
+* More advance remedies:  See later in the book
+
+##### Example of residual analysis for non-linearity
+
+
+
+#### Correlation of Error Terms
+
+#### Non-constant Variance of Error Terms
+
+#### Outliers = unusual $y$ values
+
+#### High Leverage Points = unusual $x$ values
+
+#### Collinearity
