@@ -1,0 +1,358 @@
+---
+title: "ISLR Chap 3 Notes"
+author: "M. E. Waggoner"
+date: "February 6, 2019"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 5
+    pandoc_args: [
+      "--number-sections"
+    ]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      fig.width = 4 ,
+                      fig.height = 3)
+require(tidyverse)    # various including as_factor()
+require(texreg)       # screenreg()
+require(ggfortify)    # autoplot()
+require(knitr)        # kable()
+require(broom)        # tidy()
+require(modelr)       # add_residuals()
+
+options(digits = 4)
+
+
+
+# A function to extract and print the F-statistic
+tidyF <- function(lmobj) {
+  stats <- summary(lmobj)$fstatistic
+  prob <- 1- pf(stats[["value"]], 
+                df1 = stats[["numdf"]], 
+                df2 = stats[["dendf"]])
+  tibble(`F-statistic` = c(stats[["value"]]),
+         df1 = c(stats[["numdf"]]), 
+         df2 = c(stats[["dendf"]]),
+         `p-value` = c(prob)
+         )
+  }
+
+```
+
+
+$\setcounter{section}{2}$
+
+#  Linear Regression
+
+$\setcounter{subsection}{2}$
+$\setcounter{equation}{25}$
+
+Note:  The section numbers of this document match up with ISLR.  The equation numbers match up with the section, but you need to append "3." to the number.
+
+## Other Considerations in the Regression Model
+
+### Qualitative Predictors
+
+A factor variable with $n$ levels will generate $n-1$ dummy variables to store the information.
+
+#### Predictors with Only Two Levels
+
+If `gender` is a factor variable with two *levels*, R will create a *dummy variable* that takes on two values
+
+\begin{align}
+x_i = \left\{ \begin{array}{ll} 
+                1 & \text{if }i\text{th person is female} \\
+                0 & \text{if }i\text{th person is not female} \\
+                \end{array} \right. .
+\end{align}
+
+Since $x_i$ only takes on two values, 0 or 1, the model becomes 
+
+\begin{align*}
+y_i = \beta_1 x_i + \beta_0 = \left\{ \begin{array}{ll} 
+                \beta_1(1) + \beta_0 & \text{if }i\text{th person is female} \\
+                \beta_1(0) + \beta_0 & \text{if }i\text{th person is not female} \\
+                \end{array} \right. 
+\end{align*}
+
+or 
+
+\begin{align}
+y_i = \beta_1 x_i + \beta_0 = \left\{ \begin{array}{ll} 
+                \beta_1 + \beta_0 & \text{if }i\text{th person is female} \\
+                \beta_0 & \text{if }i\text{th person is not female} \\
+                \end{array} \right. .
+\end{align}
+
+Thus, 
+
+* $\beta_0$ is the contribution to the value of $y$ among males,
+
+* $\beta_1$ + $\beta_0$ is the  value of $y$ among females, and
+
+* $\beta_1$ is the difference in the contribution to the value of $y$ between females and males.
+
+#### Qualitative Predictors with More than Two Levels
+
+If `gender` were a factor variable with three *levels* (female, male, undisclosed), R will create two *dummy variables*, each that take on two values
+
+\begin{align}
+x_{i1} = \left\{ \begin{array}{ll} 
+                1 & \text{if }i\text{th person is female} \\
+                0 & \text{if }i\text{th person is not female} \\
+                \end{array} \right.
+\end{align}
+
+and
+
+\begin{align}
+x_{i2} = \left\{ \begin{array}{ll} 
+                1 & \text{if }i\text{th person is male} \\
+                0 & \text{if }i\text{th person is not male} \\
+                \end{array} \right. .
+\end{align}
+
+The model becomes 
+
+\begin{align*}
+y_i = \beta_1 x_{i1} + \beta_2 x_{i2} + \beta_0 = \left\{ \begin{array}{ll} 
+                \beta_1 + \beta_0 & \text{if }i\text{th person is female} \\
+                \beta_2 + \beta_0 & \text{if }i\text{th person is male} \\
+                \beta_0 & \text{if }i\text{th person's gender is undisclosed} \\
+                \end{array} \right. .
+\end{align*}
+
+Note that $x_{i1}$ and $x_{i2}$ will never both be 1 for the same observation.  We can interpret the coefficients in the following way: 
+
+* $\beta_0$ is the contribution to the value to $y$ from someone from having undisclosed gender as opposed to disclosing gender,
+
+* $\beta_1 + \beta_0$ is the contribution to the value of $y$ from being female as opposed to not being female, and
+
+* $\beta_2 +\beta_0$ is the contribution to the value of $y$ from being male as opposed to not being male.
+
+
+
+##### Example: Using factors and interpreting dummy variables
+
+Here we will read in a dataset about solar flares, which was chosen because it has ten categorical predictors.  We will make some changes to those variables so that the output is more people readable, investigate the structure of factor variables, and see them used in a regression.
+
+Information about this dataset can be found at the [UCI database repository](https://archive.ics.uci.edu/ml/machine-learning-databases/solar-flare/flare.names).  The classification codes can be found at the [Solar Influences Data Analysis Center](http://sidc.oma.be/educational/classification.php).
+
+This dataset has a first line that is not an observation, and so we skip it.  There are no variable names in the webpage, and so we add the names by hand.  R will not parse the factors that have numeric levels as factors, and so we tell `read_delim()` to parse the first 10 columns as factor variables and the last three as numeric with the option `col_types = "fffffffnnn".`
+
+```{r echo = TRUE}
+flare <- 
+  read_delim("https://archive.ics.uci.edu/ml/machine-learning-databases/solar-flare/flare.data1", 
+             delim = " ", 
+             skip = 1, 
+             col_names = c("ZClass", "Size", "Distr",
+                          "Activity", "Evolution", "Previous",
+                          "Complex", "New", "Area",
+                          "Largest", "C_Class", "M_Class",
+                          "X_Class"),
+             # col_types = "ffffffffffnnn"  Used before new lines below
+             # am saving in case I want to revert back to this
+             col_types = cols(ZClass = col_factor(levels = NULL),
+                              Size = col_factor(levels = NULL),
+                              Distr = col_factor(levels = NULL),
+                              Activity = col_factor(levels = NULL), 
+                              Evolution = col_factor(levels = NULL), 
+                              Previous = col_factor(levels = NULL),
+                              Complex = col_factor(levels = NULL), 
+                              New = col_factor(levels = NULL), 
+                              Area = col_factor(levels = NULL),
+                              Largest = col_factor(levels = NULL), 
+                              C_Class = col_integer(), 
+                              M_Class = col_integer(),
+                              X_Class = col_integer())
+               )
+
+kable(head(flare), align = "ccccccccccccc")
+
+
+str(flare$Activity)
+str(flare$Evolution)
+str(flare$Distr)
+
+
+```
+
+However, from the documentation we know that the numbers in variables like `Activity` represent something more meaningful:  1 => reduced, 2 => unchanged.  Factor variables can store numeric values and display more meaningful labels 
+
+```{r echo = TRUE}
+flare$Distr <- recode(flare$Distr, 
+                      X = "Undefined", 
+                      O = "Open",
+                      I = "Intermediate", 
+                      C = "Compact")
+
+flare$Activity <- recode(flare$Activity,
+                         "1" = "Reduced", 
+                         "2" = "Unchanged")
+flare$Evolution <- recode(flare$Evolution, 
+                   "1" = "Decay", 
+                   "2" = "None", 
+                   "3" = "Growth")
+flare$Previous <- recode(flare$Previous,
+                         "1" = "LTM1",
+                         "2" = "M1",
+                         "3" = "GTM1",
+                         .ordered = "TRUE")
+flare$Complex <- recode(flare$Complex,
+                        "1" = "Yes", 
+                        "2" = "No")
+flare$New  <- recode(flare$New,
+                        "1" = "Yes", 
+                        "2" = "No")
+flare$Area  <- recode(flare$Area,
+                      "1" = "Small", 
+                      "2" = "Large",
+                      .ordered = "TRUE")
+           
+
+flare$Largest <- recode(flare$Largest,
+                        "1" = "LT5", 
+                        "2" = "GT5",
+                        .ordered = "TRUE")
+
+kable(head(flare, align = "ccccccccccccc"))
+
+str(flare$Activity)
+str(flare$Evolution)
+str(flare$Distr)
+
+```
+
+A factor variable with $n$ levels will need $n-1$ dummy variables.  When `lm()` or other commands create dummy variables for factors, how can we predict what those will be?
+
+The `contrasts()` function will provide the answers.  All levels are along the left side, the dummy variables along the top, and the values of each dummy variable that result in each level.
+
+```{r}
+kable(contrasts(flare$Activity), caption = "Activity")
+kable(contrasts(flare$Evolution), caption = "Evolution")
+kable(contrasts(flare$Distr), caption = "Distribution")
+
+
+```
+
+How can we read the results of using categorical variable  as predictors in a linear model?  Consider this output.
+
+```{r}
+lmSolar <- lm(C_Class ~ Activity + Evolution + Distr, 
+              data = flare)
+
+kable(tidy(lmSolar))
+
+kable(tidyF(lmSolar))
+
+```
+
+
+The *baseline* of the factor variable is arbitrary, and the coefficients of each dummy variable depend on the baseline value.   In addition, we should consider the dependent variable to be a function of the *factor variable*, not the *dummy variables*.  Thus, the $p$-values associated with each coefficient of the dummy variables is not a useful as it was for numeric variables.
+
+The $p$-value for the $F$-statistic (0.0013 < 0.05) indicates that we would reject the null hypothesis that $\beta_{Activity} = \beta_{Evolution}= \beta_{Distr} = 0$, and accept that there is a relationship between `C_Class` and these three predictors.
+
+Consider the coefficients of `DistrIntermediate`, `DistrUndefined` and `DistrCompact` and the fourth factor, "Open", in `Distribution`.   These interpretations are different than the coefficients of numeric variables.  We interpret these based on the dummy variable being yes or no, and not as a slope.  
+
+Assuming that `Activity` and `Evolution` are fixed:
+
+*  The small positive value $\beta_{DistrIntermediate} = 0.0051$ indicates that an active region in the sun with an intermediate distribution of sun spots contributes 0.0051 more to the number of C-class flares than any region without an intermediate distribution of sun spots.
+
+* The negative value $\beta_{DistrUndefined} = -0.0740$ indicates that an active region in the sun with an undefined distribution of sun spots contributes 0.0740 *less* to the number of C-class flares than any region without an undefined distribution of sun spots.
+
+* The positive value $\beta_{DistrComplex} = 0.2819$ indicates that an active region in the sun with an complex distribution of sun spots contributes 0.2819 more to the number of C-class flares than any region without an complex distribution of sun spots.
+
+
+
+### Extensions of the Linear Model
+
+#### Removing the Additive Assumption {-}
+
+The additive assumption is that $\partial Y/\partial X_i$ is independent from all $X_j$ where $i \neq j$.
+
+Some models should not have the additive assumption.  Consider a predator-prey model where the change in the population of prey depends not just on the number of prey or the number of predators, but also depends on the *interaction* between the two.  
+
+The *interaction* term in 
+\begin{align}
+Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \beta_3 X_1 X_2 + \epsilon
+\end{align}
+is the term with the product of $X_1$ and $X_2$.  If $X_i$ is **quantitative** for $i = 1, 2$, we see that 
+\begin{align*}
+\frac{\partial Y}{\partial X_1} = \beta_1 + \beta_3 X_2
+\end{align*}
+depends on $X_2$, and thus, the additive assumption has been relaxed.  On the other hand, if $X_2$ is binary and there is no interaction term between $X_1$ and $X_2$, then we are assuming the *slope* of the regression is the same for both values of $X_2$.  An interaction term can create two different slopes for each value of $X_2$, making the model more flexible.
+
+```{r, include=TRUE, fig.align ="center",  fig.cap=c("Figure 3.7 from ISLR:  The model on the left has no interaction term between Income and Type of student, and the model on the right has an interaction term allowing the slopes for each type of student to vary"), echo=FALSE}
+# Use if pdf output 
+#include_graphics("http://www-bcf.usc.edu/~gareth/ISL/Chapter3/3.7.pdf")
+
+# Use if html output
+include_graphics("ISLR Figure 3.7.jpg")
+```
+
+
+
+#### Non-linear Relationships {-}
+
+An interaction term not only relaxes the additive assumption, but the linear assumptions as well, which says that $\partial Y\/partial X_i$ is constant.  However, we can relax the linear assumption without relaxing the additive assumption by using higher powers of a variable or other functions like logs, reciprocation, or roots.
+
+### Potential Problems
+
+The problems that might occur in a linear regression model include
+
+* Problems with the model 
+
+1. Non-linearity of the response-predictor relationships
+
+2.  Correlation of error terms, that is, a relationship between $y_i - \hat{y}_i$ and $i$
+
+3.  Non-constant variance of error terms, that is, a relationship between $y - \hat{y}$ and $\hat{y}$
+
+* Problems with the data
+
+4.  Outliers = unusual $y$ values, can be diagnosed by a residual plot
+
+5. High leverage points = unusual $x$ values
+
+6. Collinearity between predictors
+
+#### Non-linearity of the Data 
+
+Non-linearity of the data can be demonstrated by non-randomness in $y - \hat{y}$ v. $\hat{y}$.  We see that in the `cars` data, the relationship of `dist ~ speed` is not linear since the residuals are not normally distributed about zero.  There is indication from the residuals that the linear model has not captured all the patterns in the data.
+
+```{r, echo=FALSE}
+mycars <- mtcars
+lmCars <- lm(mpg ~ disp, data = mycars)
+
+autoplot(lmCars, which = c(2, 1), 
+         main = "Residual analysis of dist = f(speed) in the dataset 'mycars' ")
+```
+
+
+#### Correlation of Error Terms 
+
+This is mostly a concern with time series data, where the index of the observation is directly related to the time the observation was captured.  However, it can also be an issue with a sample that was not randomly selected from the underlying population.
+
+For this we want to plot the residuals $y - \hat{y}$ v. $i$, the index of the observation.  To do this, let's add the residuals to our dataset.  Here I used a variable with a leading to indicate that it was derived and not original to the data.
+
+The plot of residuals against the index of each observation shows some possible patterns:  The residuals for observations 9-14 are about zero or above, but from 15-32 only 2 residuals are above 1.25.  This could be possible with such a small dataset, but it is worth looking into.
+
+```{r}
+mycars %>% 
+  add_residuals(lmCars, var = ".resid") -> mycars
+mycars %>% 
+  ggplot(aes(x = row.names(.), y = .resid)) +
+  geom_point() + 
+  scale_x_discrete(labels=as.character(1:nrow(mycars))) +
+  xlab("Index")
+```
+
+#### Non-constant Variance of Error Terms 
+
+#### Outliers = unusual $y$-values 
+
+#### High Leverage Points = unusual $x$-values 
+
+#### Collinearity = $x_i$ ~ $x_j$ 
