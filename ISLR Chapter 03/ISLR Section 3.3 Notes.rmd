@@ -254,19 +254,56 @@ Assuming that `Activity` and `Evolution` are fixed:
 
 ### Extensions of the Linear Model
 
-#### Removing the Additive Assumption
+#### Removing the Additive Assumption {-}
 
 The additive assumption is that $$\frac{\partial Y}{\partial X_i}$$ is independent of all $X_j$ where $j \neq i$.  For a linear equation $$Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \cdots,$$ the partials $$\frac{\partial Y}{\partial X_i} = \beta_i$$ are constant, and hence, satisfy the additive assumption.
 
 On the other hand, if the equation is $$Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \beta_3 X_1 X_2,$$ then $$\frac{\partial Y}{\partial X_1} = \beta_1 + \beta_3 X_2,$$ and is dependent on $X_2$.  
 
-Some models need interaction terms because the change in the outcome is sometimes based on interaction.  Consider a predator-prey model where change in population depends on the interactions of predator and prey.
+Some models need interaction terms because the change in the outcome is sometimes based on interaction.  Consider a predator-prey model where the change in the population of prey depends not just on the number of prey or the number of predators, but also depends on the *interaction* between the two.  
+
+The *interaction* term in 
+\begin{align}
+Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \beta_3 X_1 X_2 + \epsilon
+\end{align}
+is the term with the product of $X_1$ and $X_2$.  If $X_i$ is **quantitative** for $i = 1, 2$, we see that 
+\begin{align*}
+\frac{\partial Y}{\partial X_1} = \beta_1 + \beta_3 X_2
+\end{align*}
+depends on $X_2$, and thus, the additive assumption has been relaxed.  On the other hand, if $X_2$ is binary and there is no interaction term between $X_1$ and $X_2$, then we are assuming the *slope* of the regression is the same for both values of $X_2$.  An interaction term can create two different slopes for each value of $X_2$, making the model more flexible.
+
+```{r, include=TRUE, fig.align ="center",  fig.cap=c("Figure 3.7 from ISLR:  The model on the left has no interaction term between Income and Type of student, and the model on the right has an interaction term allowing the slopes for each type of student to vary"), echo=FALSE}
+# Use if pdf output 
+#include_graphics("http://www-bcf.usc.edu/~gareth/ISL/Chapter3/3.7.pdf")
+
+# Use if html output
+include_graphics("ISLR Figure 3.7.jpg")
+```
 
 #### Non-linear Relationships
+An interaction term not only relaxes the additive assumption, but the linear assumptions as well, which says that $\partial Y\/partial X_i$ is constant.  However, we can relax the linear assumption without relaxing the additive assumption by using higher powers of a variable or other functions like logs, reciprocation, or roots.												
 
 ### Potential Problems
 
-#### Non-linearity of the Data
+The problems that might occur in a linear regression model include
+
+* Problems with the model 
+
+1. Non-linearity of the response-predictor relationships
+
+2.  Correlation of error terms, that is, a relationship between $y_i - \hat{y}_i$ and $i$
+
+3.  Non-constant variance of error terms, that is, a relationship between $y - \hat{y}$ and $\hat{y}$
+
+* Problems with the data
+
+4.  Outliers = unusual $y$ values, can be diagnosed by a residual plot
+
+5. High leverage points = unusual $x$ values
+
+6. Collinearity between predictors
+
+#### Non-linearity of the Data 
 
 If the discernible patterns in the data are not captured by the model, then the residuals will exhibit a non-random pattern.  If the residuals exhibit one of these behaviors, we should work toward a different model and the behaviors of the residuals should help us know what that model should do.
 
@@ -283,11 +320,38 @@ The diagnostic tools for observing non-linearity of the data are residual plots;
 
 ##### Example of residual analysis for non-linearity
 
+Non-linearity of the data can be demonstrated by non-randomness in $y - \hat{y}$ v. $\hat{y}$.  We see that in the `cars` data, the relationship of `dist ~ speed` is not linear since the residuals are not normally distributed about zero.  There is indication from the residuals that the linear model has not captured all the patterns in the data.
+
+```{r, echo=FALSE}
+mycars <- mtcars
+lmCars <- lm(mpg ~ disp, data = mycars)
+
+autoplot(lmCars, which = c(2, 1), 
+         main = "Residual analysis of dist = f(speed) in the dataset 'mycars' ")
+```
 
 
-#### Correlation of Error Terms
+#### Correlation of Error Terms 
+
+This is mostly a concern with time series data, where the index of the observation is directly related to the time the observation was captured.  However, it can also be an issue with a sample that was not randomly selected from the underlying population.
+
+For this we want to plot the residuals $y - \hat{y}$ v. $i$, the index of the observation.  To do this, let's add the residuals to our dataset.  Here I used a variable with a leading to indicate that it was derived and not original to the data.
+
+The plot of residuals against the index of each observation shows some possible patterns:  The residuals for observations 9-14 are about zero or above, but from 15-32 only 2 residuals are above 1.25.  This could be possible with such a small dataset, but it is worth looking into.
+
+```{r}
+mycars %>% 
+  add_residuals(lmCars, var = ".resid") -> mycars
+mycars %>% 
+  ggplot(aes(x = row.names(.), y = .resid)) +
+  geom_point() + 
+  scale_x_discrete(labels=as.character(1:nrow(mycars))) +
+  xlab("Index")
+```
 
 #### Non-constant Variance of Error Terms
+
+This section needs to be completed.
 
 #### Outliers = unusual $y$ values
 
