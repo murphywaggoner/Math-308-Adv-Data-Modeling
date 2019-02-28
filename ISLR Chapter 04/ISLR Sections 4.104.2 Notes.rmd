@@ -1,0 +1,47 @@
+---
+title: "ISLR Chap 4 Notes"
+author: "M. E. Waggoner"
+date: "February 24, 2019"
+output: 
+  pdf_document:
+    toc: yes
+    toc_depth: 5
+    pandoc_args: [
+      "--number-sections",
+      "--number-offset=4"
+    ]
+---
+
+```{r setup, include=FALSE}
+require(tidyverse)    # various
+require(texreg)       # screenreg()
+require(ggfortify)    # autoplot()
+require(knitr)        # kable()
+require(broom)        # tidy()
+
+options(digits = 4)
+```
+
+
+$\setcounter{section}{3}$
+
+# Classification
+
+## An Overview of Classification
+
+Note:  The section numbers of this document match up with ISLR.  The equation numbers match up with the section, but you need to append "4." to the number.
+
+A factor variable can be called *qualitative*, *categorical*, or other names that indicate that it takes on a finite number of *classes*, *levels*, or *factors*.  When the output variable is qualitative, the process of prediction is called *classification* rather than regression.
+
+This section of ISLR covers four methods of classification:  
+
+* logistic regression,
+
+* linear discriminant analysis (LDA),
+
+* quadratic discriminant analysis (QDA), and
+
+* K-nearest neighbors (KNN).
+
+Other classifiers are covered in Chapters 7, 8, and 9.
+
