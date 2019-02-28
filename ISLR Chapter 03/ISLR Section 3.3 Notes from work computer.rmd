@@ -49,7 +49,7 @@ $\setcounter{section}{2}$
 $\setcounter{subsection}{2}$
 $\setcounter{equation}{25}$
 
-Note:  The section numbers of this document match up with ISLR.  The equation numbers match up with the section, but you need to append "3." to the number.
+Note:  This section is incomplete.  An updated version will be posted on Scholar.  The section numbers of this document match up with ISLR.  The equation numbers match up with the section, but you need to append "3." to the number.
 
 ## Other Considerations in the Regression Model
 
