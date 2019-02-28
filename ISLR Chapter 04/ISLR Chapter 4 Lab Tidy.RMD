@@ -1,0 +1,850 @@
+---
+title: "ISLR Chapter 4 Labs"
+author: "M. E. Waggoner"
+date: "January 1, 2019"
+output: 
+  html_document:
+    toc: yes
+    pandoc_args: [
+      "--number-sections",
+      "--number-offset=3"
+    ]
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+require(broom)        # tidy(), glance(), augment()
+require(MASS)         # lda(), qda()
+require(ISLR)         # Stock Market Data, Caravan Insurance Data
+require(tidyverse)    # ggplot(), filter(), select(), etc.
+require(class)        # knn()
+require(GGally)       # ggpairs()
+require(knitr)        # kable()
+
+select <- dplyr::select    #  load last so that `select()` is not overwritten by MASS
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# ISLR labs
+
+The labs in the [ISLR textbook](http://www-bcf.usc.edu/~gareth/ISL/) must be used in conjunction with the narrative in order to connect code with theory.  The code here will show how to use `R` to make the calculations and plots, but the interpretation and use of this information is explained in the text.  References to sections of the text are made wherever possible.  The section numbers in this document do not align with the section numbers in ISLR.
+
+## Data Analysis Advice
+
+Sometimes problems can be resolved by doing less to the data rather than more.
+
+## Classification by Logistic Regression
+
+###  The Stock Market Data
+
+We will begin by examining some numerical and graphical summaries of
+the `Smarket` data, which is part of the `ISLR` library. This data set consists of
+percentage returns for the S&P 500 stock index over 1,250 days, from the
+beginning of 2001 until the end of 2005. For each date, we have recorded
+the percentage returns for each of the five previous trading days, `Lag1`
+through `Lag5`. We have also recorded `Volume` (the number of shares traded
+on the previous day, in billions), `Today` (the percentage return on the date
+in question) and `Direction` (whether the market was `Up` or `Down` on this
+date).
+
+```{r}
+Smarket <- as_tibble(Smarket)
+str(Smarket)
+
+```
+
+The `GGally::ggpairs()` function produces a matrix whose upper triangle contains all of the pairwise correlations among the variables of the data set.  The lower triangle shows the pairwise plots.  The diagonal shows the distribution of each variable.
+
+As one would expect, the correlations between the lag variables and today's returns are close to zero.  In other words, there appears to be little correlation between today's returns and previous days' returns.  The only substantial correlation is between `Year` and `Volume`.  We see that `Volume` is increasing over time.  The ohter words, the average number of shares traded daily increased from 2001 to 2005.
+
+```{r}
+ggpairs(Smarket)
+```
+
+### Logistic regression for two-level factor output
+
+In this lab, we will fit a logistic regression model in order to predict `Direction` using `Lag1` through `Lag5` and `Volume`. Of course, the overall goal would be to predict whether the stock market will go up or down on any given day with an accuracy exceeding chance, or 50%.
+
+### Using `glm()` to generate a logistic model and  statistics
+
+The `glm()` function fits **generalized linear models**, a class of models that includes logistic regression. The syntax of the `glm()` function is similar to that of `lm()`, except that we must pass in the argument `family = binomial` in order to tell `R` to run a logistic regression rather than some other type of generalized linear model.
+
+We use the `tidy()` function in order to access just the coefficients and their related statistics for this fitted model.  The `glance()` command lists various statistics, and the `confint()` command lists the confidence intervals for the coefficients.
+
+
+```{r}
+Model_logist <- glm(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume,
+              data = Smarket,
+              family = binomial)
+tidy(Model_logist)
+glance(Model_logist)
+confint(Model_logist)    # suppressMessages(confint(Model_logist)) 
+                        # will eliminate the "Waiting for pro...."
+
+```
+
+The smallest $p$-value here is associated with `Lag1`. The *negative coefficient*
+for this predictor suggests that if the market had a positive return yesterday,
+then it is less likely to go up today. However, at a value of 0.145, the $p$-value
+is still relatively large, and so there is no clear evidence of a real association
+between `Lag1` and `Direction`.
+
+
+
+### Generating predicted (fitted) probabilities
+
+The functions we used in Chapter 3 for `lm` objects will also work for `glm` objects.  
+For instance, `augment()` will add fitted values and residuals to a tibble along with the data.  However, the default fitted values from `augment()` for a `glm` object are *log-odds*; to get the *probabilities* we need to add the parameters `type.predict = response` and `type.residual = response`.  See ISLR equation (4.4) for the relationship between log-odds and probabilities.
+
+Just like for linear regression, the `augment()` function can give predictions for test data as well.
+
+
+
+```{r}
+Model_logist_logodds <- augment(Model_logist)
+Model_logist_probs <- augment(Model_logist, 
+                           type.predict = "response",
+                           type.residuals = "response")
+kable(head(Model_logist_logodds), caption = "Logits")
+kable(head(Model_logist_probs ), caption = "Probabilities")
+
+head(log(Model_logist_probs$.fitted/(1- Model_logist_probs$.fitted)))
+```
+
+
+
+We know that the predicted probabilities correspond to
+the probability of the market going up, rather than down, because the
+`contrasts()` function indicates that `R` has created a dummy variable with
+a 1 for `Up`.
+
+
+```{r}
+contrasts(Smarket$Direction)
+```
+
+In order to make a prediction as to whether the market will go up or
+down on a particular day, we must convert these predicted probabilities
+into factor labels, `Up` or `Down`. Create a column in `Model_logist_probs`
+of predictions based on whether the predicted probability of a market
+increase is greater than or less than 0.5.
+
+
+```{r}
+Model_logist_probs <- 
+  Model_logist_probs %>%
+  mutate(.pred = ifelse(.fitted > 0.5, "Up", "Down")) %>% 
+  select(.pred, .fitted, everything())           # puts the .pred, .fitted columns first
+
+Model_logist_probs
+```
+
+
+### Measuring classification error
+
+#### Confusion table for measuring training error
+
+Given these predictions, we can `count()` how many observations were correctly or incorrectly classified and create a confusion matrix.
+
+
+The diagonal elements of the confusion matrix indicate correct predictions,
+while the off-diagonals represent incorrect predictions. Hence our model
+correctly predicted that the market would go up on 507 days and that
+it would go down on 145 days, for a total of 507 + 145 = 652 correct
+predictions. The `mean()` function can be used to compute the fraction of
+days for which the prediction was correct. In this case, logistic regression
+correctly predicted the movement of the market 52.2% of the time.
+
+
+At first glance, it appears that the logistic regression model is working
+a little better than random guessing. But remember, this result is misleading
+because we trained and tested the model on the same set of 1,250 observations.
+In other words, $100 - 52.2 = 47.8\%$ is the **training error rate**. As we
+have seen previously, the training error rate is often overly optimistic - it
+tends to underestimate the _test_ error rate. 
+
+
+
+```{r}
+Model_logist_probs %>% 
+  count(.pred, Direction) %>%        # counts all combinations of (.pred, Direction)
+  spread(Direction, n, fill = 0) -> confusion
+
+confusion
+
+(train_correct <- (confusion[1, 2] + confusion[2, 3])/nrow(Smarket))
+
+Model_logist_probs %>%
+  summarize(accuracy = mean(.pred == Direction),
+            error = mean(.pred != Direction))
+```
+
+
+#### Creating train and test sets
+
+In order to better assess the accuracy
+of the logistic regression model in this setting, we can fit the model
+using part of the data, and then examine how well it predicts the held out
+data. This will yield a more realistic error rate, in the sense that in practice
+we will be interested in our model's performance not on the data that
+we used to fit the model, but rather on days in the future for which the
+market's movements are unknown.
+
+To implement this strategy, we will first create a vector corresponding
+to the observations from 2001 through 2004. We will then use this vector
+to create a held out data set of observations from 2005.
+
+
+```{r}
+train_SMarket <- Smarket %>%
+  filter(Year < 2005)
+
+test_SMarket <- Smarket %>%
+  filter(Year >= 2005)
+```
+
+We now fit a logistic regression model using only the subset of the observations
+in the training set `train_SMarket`.  We will then apply the model to the test set `test_SMarket` to obtain predicted probabilities of the stock market going up for
+each of the days in our test set, that is, for the days in 2005.
+
+Notice that we have trained and tested our model on two different
+data sets: training was performed using only the dates before 2005,
+and testing was performed using only the dates in 2005. Finally, we compute
+the predictions for 2005 and compare them to the actual movements
+of the market over that time period.
+
+
+```{r}
+Model_logist_train <- glm(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume, 
+                  data = train_SMarket, 
+                  family = binomial)
+
+Model_logist_test_data <-  
+  augment(Model_logist_train,
+          newdata = test_SMarket,
+          type.predict = "response",
+          type.residuals = "response")
+
+Model_logist_test_data <- Model_logist_test_data %>% 
+  mutate(.pred = ifelse(.fitted > 0.5, "Up", "Down")) 
+
+Model_logist_test_data %>%
+  count(.pred, Direction) %>%
+  spread(Direction, n, fill = 0)
+
+Model_logist_test_data %>%
+  summarize(accuracy = mean(.pred == Direction),
+            error = mean(.pred != Direction))
+```
+
+The results are rather disappointing: the test error
+rate is 52%, which is worse than random guessing! Of course this result
+is not all that surprising, given that one would not generally expect to be
+able to use previous days' returns to predict future market performance.
+(After all, if it were possible to do so, then the authors of this book [along with your professor] would probably
+be out striking it rich rather than teaching statistics.)
+
+
+### Looking for a better logistic model
+
+We recall that the logistic regression model had  underwhelming $p$-values
+associated with all of the predictors, and that the smallest $p$-value,
+though not very small, corresponded to `Lag1`. Perhaps by removing the
+variables that appear not to be helpful in predicting `Direction`, we can
+obtain a more effective model. After all, using predictors that have no
+relationship with the response tends to cause a deterioration in the test
+error rate (since such predictors cause an increase in variance without a
+corresponding decrease in bias), and so removing such predictors may in
+turn yield an improvement.
+
+#### Testing the new model
+
+In the space below, we refit a logistic regression using just `Lag1` and `Lag2`, the variables that seemed to have the highest predictive power in the original logistic regression model.
+
+
+```{r}
+
+# -----------------------------------
+# Note that if we wanted to try many different 
+# models, it would be worthwhile to create a
+# function where we pass in the data and formula
+# -----------------------------------
+Model_lag12 <- glm(Direction ~ Lag1 + Lag2, 
+                  data = train_SMarket, 
+                  family = binomial)
+
+Model_lag12_test_data <-  
+  augment(Model_lag12,
+          newdata = test_SMarket,
+          type.predict = "response",
+          type.residuals = "response") %>% 
+  mutate(.pred = ifelse(.fitted > 0.5, "Up", "Down")) 
+
+Model_lag12_test_data %>%
+  count(.pred, Direction) %>%
+  spread(Direction, n, fill = 0)
+
+Model_lag12_test_data %>%
+  summarize(accuracy = mean(.pred == Direction),
+            error = mean(.pred != Direction))
+```
+
+Now the results appear to be more promising: 56% of the daily movements
+have been correctly predicted. The confusion matrix suggests that on days
+when logistic regression predicts that the market will decline, it is only
+correct 50% of the time. However, on days when it predicts an increase in
+the market, it has a 58% accuracy rate.
+
+This suggests a possible trading strategy of buying on days when the model predicts an increasing market, and avoiding trades on days when a decrease is predicted.  Of course, one would need ot investigate more carefully whether this small improvement was real or just due to random chance.
+
+#### Predicing new values
+
+In practice, we would want to use the model to predict the returns associated with *particular
+values* of `Lag1` and `Lag2`. In particular, we want to predict `Direction` on a
+day when `Lag1` and `Lag2` equal $1.2$ and $1.1$, respectively, and on a day when
+they equal $1.5$ and $-0.8$. We do this using the `augment()` function and passing in a `tibble` with the new values.  The results are probabilities of the market going up.  We can convert those into Up/Down.  Note the standard errors and the intervals $prob \pm 2SE$ will include 50%, showing that the prediction could go either way.
+
+
+```{r}
+myData <- tibble(Lag1 = c(1.2, 1.5),
+                 Lag2 = c(1.1, -0.8))
+augment(Model_lag12,
+        newdata = myData,
+        type.predict = "response",
+        type.residuals = "response") %>% 
+  mutate(.pred = ifelse(.fitted > 0.5, "Up", "Down"))
+
+
+```
+
+
+## Classification by Linear Discriminant Analysis
+
+Now we will perform linear discriminant (LDA) on the `Smarket` data from the `ISLR` package. The mathematical basis for LDA is covered in ISLR Section 4.4.
+
+
+
+ As we did with logistic regression, we'll fit the model using only the observations before 2005, and then test the model on the data from 2005.  We recreate the test and train sets here for completeness
+ 
+ 
+
+```{r}
+train_SMarket <- Smarket %>%
+  filter(Year < 2005)
+
+test_SMarket <- Smarket %>%
+  filter(Year >= 2005)
+
+```
+
+
+### Generating the LDA model and statistics
+
+
+In `R`, we can fit a LDA model using the `lda()` function, which is part of the `MASS` library.  The syntax for the `lda()` function is identical to that of `lm()`, and to that of
+`glm()` except for the absence of the `family` option.
+
+The `broom` functions `tidy()` and `glance()` do not work on LDA objects, but we can pull out specific statistics using the `$` operator.
+
+```{r}
+
+(Model_LDA <- lda(Direction ~ Lag1 + Lag2, 
+                 data = train_SMarket))
+
+kable(Model_LDA$prior, caption = "Prior probabilities of groups (pi hat 1 and pi hat 2")
+
+kable(Model_LDA$means, caption = "Group means")
+
+kable(Model_LDA$scaling, caption = "Coefficients of linear discriminants")
+
+
+
+```
+
+The LDA output indicates *prior probabilities* of ${\hat{\pi}}_1 = 0.492$ and ${\hat{\pi}}_2 = 0.508$; in other words,
+49.2% of the training observations correspond to days during which the
+market went down.
+
+The function also provides the *group means*; these are the average
+of each predictor within each class, and are used by LDA as estimates
+of $\mu_k$. These suggest that there is a tendency for the previous 2 days'
+returns to be negative on days when the market increases, and a tendency
+for the previous days' returns to be positive on days when the market
+declines. 
+
+The *coefficients of linear discriminants* output provides the linear
+combination of `Lag1` and `Lag2` that are used to form the LDA decision rule.
+
+If $-0.642\times{\tt Lag1}-0.514\times{\tt Lag2}$ is large, then the LDA classifier will
+predict a market increase, and if it is small, then the LDA classifier will
+predict a market decline. 
+
+
+
+### Getting more information from the model
+
+Borrowing code from [Beargrittly](https://stackoverflow.com/questions/28781885/how-to-plot-the-results-of-a-lda) we can create a plot that compares well with Figure 4.4 in ISLR.  These are obtained by computing $-0.642\times{\tt Lag1}-0.514\times{\tt Lag2}$ for
+each of the training observations.
+
+
+
+```{r}
+# A function written by Beargrittly on StackOverflow
+# creates a data frame from a 2 group LDA model in order
+# to recreate a plot like Figure 4.4 in ISLR
+ggplotLDAPrep <- function(x){
+  if (!is.null(Terms <- x$terms)) {
+    data <- model.frame(x)
+    X <- model.matrix(delete.response(Terms), data)
+    g <- model.response(data)
+    xint <- match("(Intercept)", colnames(X), nomatch = 0L)
+    if (xint > 0L) 
+      X <- X[, -xint, drop = FALSE]
+  }
+  means <- colMeans(x$means)
+  X <- scale(X, center = means, scale = FALSE) %*% x$scaling
+  rtrn <- as.data.frame(cbind(X,labels=as.character(g)))
+  rtrn <- data.frame(X,labels=as.character(g))
+  return(rtrn)
+}
+
+#  Use ggplotLDAPrep to create data that will plot
+# the results for a 2 group LDA model
+fitGraph <- ggplotLDAPrep(Model_LDA)
+
+
+# Use that data to create overlapping histograms of LD1
+ggplot(fitGraph, aes(LD1,fill=labels))+geom_histogram()
+```
+
+We can see from the plot, that the two groups have significant overlap, and thus LDA does not separate the data well.
+
+Note that if the data had three groups, the results would be plotted in 2 dimensions.  In general, for $n$ groups, the results of LDA need to be plotted in $n - 1$ dimensions.
+
+### Generating predicted probabilities 
+
+The `predict()` function returns a list with three elements. The first element,
+`class`, contains the LDA predictions about the movement of the market.
+The second element, `posterior`, is a matrix whose $k^{th}$ column contains the
+posterior probability that the corresponding observation belongs to the $k^{th}$
+class. Finally, `x` contains the linear discriminants,
+described earlier.
+
+
+```{r}
+predictions_LDA <- predict(Model_LDA, test_SMarket)
+Model_LDA_test_data <-
+  cbind(test_SMarket,
+        .pred = predictions_LDA$class,
+        .post = predictions_LDA$posterior,
+        .x = predictions_LDA$x[,1])
+
+Model_LDA_test_data
+
+
+```
+
+### Measuring classification error
+
+Let's check out the confusion matrix to see how this model is doing. We'll want to compare the **predicted class** to the **true class**.
+
+```{r}
+
+Model_LDA_test_data %>%
+  count(.pred, Direction) %>%
+  spread(Direction, n, fill = 0)
+
+Model_LDA_test_data %>%
+  summarize(accuracy = mean(.pred == Direction),
+            error = mean(.pred != Direction))
+```
+
+
+We can use a posterior probability threshold other than 50% in order to make predictions.  For instance, suppose that we wish to predict a market decrease only if we are very certain that the market will decrease on that day--say, if the posterior probability is at least 90%.
+
+
+```{r}
+Model_LDA_test_data %>%
+  mutate(.pred90 = if_else(.post.Down > 0.9, "Up", "Down"))
+```
+
+### Comparing LDA to Logistic
+
+The LDA predictions are identical to the ones from our logistic model on `Lag1` and `Lag2` from above.
+
+```{r}
+
+tibble(Logist.pred = Model_lag12_test_data$.pred, 
+       LDA.pred = Model_LDA_test_data$.pred)  %>%
+  count(Logist.pred, LDA.pred) %>%
+  spread(Logist.pred, n, fill = 0)
+
+```
+
+
+## Classification by Quadratic Discriminant Analysis
+
+
+Now we will perform quadratic discriminant analysis (QDA) on the `Smarket` data from the `ISLR` package. The mathematical basis for QDA is covered in ISLR Section 4.5.
+
+As we did with logistic regression and LDA, we'll fit the model using only the observations before 2005, and then test the model on the data from 2005.  We recreate the test and train sets here for completeness
+ 
+ 
+
+```{r}
+train_SMarket <- Smarket %>%
+  filter(Year < 2005)
+
+test_SMarket <- Smarket %>%
+  filter(Year >= 2005)
+
+```
+
+
+###Generating the QDA model and statistics
+
+QDA is implemented
+in `R` using the `qda()` function, which is also part of the MASS library. The
+syntax is identical to that of `lda()`.
+
+```{r}
+(Model_QDA <- qda(Direction ~ Lag1 + Lag2, 
+                  data = train_SMarket))
+
+kable(Model_QDA$prior, caption = "Prior probabilities of groups (pi hat 1 and pi hat 2")
+
+kable(Model_QDA$means, caption = "Group means")
+
+
+
+
+
+```
+
+The output contains the group means. But it does not contain the coefficients
+of the linear discriminants, because the QDA classifier involves a
+_quadratic_, rather than a linear, function of the predictors. 
+
+###Generating predicted probabilities
+
+The `predict()`
+function works in exactly the same fashion as for LDA.
+
+```{r}
+predictions_QDA <- predict(Model_QDA, test_SMarket)
+Model_QDA_test_data <-
+  cbind(test_SMarket,
+        .pred = predictions_LDA$class,
+        .post = predictions_LDA$posterior,
+        .x = predictions_LDA$x[,1])
+
+Model_QDA_test_data %>%
+  count(.pred, Direction) %>%
+  spread(Direction, n, fill = 0)
+  
+
+Model_QDA_test_data %>%
+  summarize(accuracy = mean(.pred == Direction),
+            error = mean(.pred != Direction))
+```
+
+MEW note:  This differs from the result in ISLR.  Do I have an error?
+
+
+
+## Classification by  K-Nearest Neighbors
+
+In this lab, we will perform K-nearest neighbors (KNN) classification on the `Smarket` dataset from `ISLR`. 
+We'll try to predict `Direction` using percentage returns from the previous two days (`Lag1` and `Lag2`). 
+
+The KNN function is `knn()` and is part of the `class` library.
+
+### The inputs to `knn()` differ from previous models
+
+This function works a bit differently from the other model-fitting
+functions that we have encountered thus far. Rather than a two-step
+approach in which we first fit the model and then we use the model to make
+predictions, `knn()` forms predictions using a single command. 
+
+The function
+requires four inputs.
+   1. Training data (just the predictors). We'll call this `train_Market`.  It must be a data frame.
+   2. Testing data (just the predictors). We'll call this `test_Market`.   It must be a data frame.
+   3. Training data (our outcome variable, which is class labels in this case). We'll call this `train_Direction`.  It must be a vector, not a data frame.
+   4. A value for `K`, the number of nearest neighbors to be used by the classifier.
+   
+Whereas, `lm()`, `glm()`, `lda()`, `qda()`, etc., can accept data frames with multiple columns and just uses the ones specified by the formula, `knn()` needs data frames as input with only the columns being used in the model.  The `knn()` function will use all the columns of the first two data frames passed to it as predictors.
+
+We'll  create two subsets of our data -- one containing the observations from 2001 through 2004, which we'll use to train the model and one with observations from 2005 on, for testing. Since we're only interested in `Lag1` and `Lag2`, we'll want to pull those out. To do this, we'll use the dplyr `filter()` command and `select()` commands:
+
+
+```{r}
+train_Market <- 
+  Smarket %>%
+  filter(Year < 2005) %>%
+  select(Lag1, Lag2)
+
+test_Market <- 
+  Smarket %>%
+  filter(Year >= 2005)%>%
+  select(Lag1, Lag2)
+```
+
+Now we just need to pull out the outcome variable for the training data. The `knn()` function expects us to provide the class labels as a *vector* rather than a *data frame*, which we can specify by adding `.$Direction` to the end of our `dplyr` chain.  We'll also pull out the true directions for the test data to compare with the results of the KNN predictions.
+
+
+```{r}
+train_Direction <- 
+  Smarket %>%
+  filter(Year < 2005) %>%
+  select(Direction) %>%
+  .$Direction 
+
+test_Direction <- 
+  Smarket %>%
+  filter(Year >= 2005) %>%
+  select(Direction) %>%
+  .$Direction 
+```
+
+### Generating KNN predictions
+
+Now the `knn()` function can be used to predict the market's movement for
+the dates in 2005. We set a **random seed** before we apply `knn()` because
+if several observations are tied as nearest neighbors, then `R` will randomly
+break the tie. Therefore, a seed must be set in order to ensure reproducibility
+of results.
+
+Here we will use $k = 1$ nearest neighbor.  Note that the output of `knn()` is simply a vector of directions.
+
+
+```{r}
+set.seed(1)
+(knn_pred1 <- knn(train_Market,     # data frame of training inputs
+               test_Market,        # data frame of testing inputs
+               train_Direction,    # vector of training outputs
+               k = 1))
+```
+
+The `table()` function can be used to produce a **confusion matrix** in order to determine how many observations were correctly or incorrectly classified.
+
+
+```{r}
+table(knn_pred1, test_Direction)
+
+tibble(.pred = knn_pred1,
+       Direction = test_Direction) %>%
+  summarize(accuracy = mean(.pred == Direction),
+            error = mean(.pred != Direction))
+
+```
+
+
+            test_Direction
+    knn_pred Down Up
+        Down   43 58
+        Up     68 83
+
+
+
+0.5
+
+
+The results using $K = 1$ are not very good, since only 50% of the observations
+are correctly predicted. Of course, it may be that $K = 1$ results in an
+overly flexible fit to the data. Below, we repeat the analysis using $K = 3$.
+
+
+```{r}
+set.seed(1)
+knn_pred3 <- knn(train_Market, 
+               test_Market, 
+               train_Direction, 
+               k = 3)
+
+table(knn_pred3, test_Direction)
+
+tibble(.pred = knn_pred3,
+       Direction = test_Direction) %>%
+  summarize(accuracy = mean(.pred == Direction),
+            error = mean(.pred != Direction))
+```
+
+
+The results have improved slightly. Let's try a few other $K$ values to see if we get any further improvement.  
+
+
+```{r}
+
+KNN_data <- tibble(k = integer(),
+                   accuracy = double())
+
+for (n in 1:10) {
+    set.seed(1)
+    knn_pred <- knn(train_Market, 
+               test_Market, 
+               train_Direction, 
+               k = n)
+    KNN_data <- KNN_data %>%  
+      add_row(k = n,
+            accuracy = mean(knn_pred == test_Direction))
+}
+
+KNN_data
+
+KNN_data %>% ggplot(aes(x = k, y = accuracy)) +
+  geom_line()
+```
+
+It looks like for classifying this dataset, `KNN` might not be the right approach.
+
+### Scaling variables in KNN
+
+
+####  The Caravan Insurance Data
+
+Let's see how the `KNN` approach performs on the `Caravan` data set, which is
+part of the `ISLR` library. This data set includes 85 predictors that measure demographic characteristics for 5,822 individuals. 
+
+The response variable is
+`Purchase`, which indicates whether or not a given individual purchases a
+caravan insurance policy. In this data set, only 6% of people purchased
+caravan insurance.
+
+
+```{r}
+
+Caravan <- as.tibble(Caravan)
+
+dim(Caravan)
+
+Caravan %>%
+    select(Purchase) %>%
+    summary()
+```
+
+
+#### The need for scaling
+
+Because the `KNN` classifier predicts the class of a given test observation by
+identifying the observations that are nearest to it, the scale of the variables
+matters. Any variables that are on a large scale will have a much larger
+effect on the distance between the observations, and hence on the `KNN`
+classifier, than variables that are on a small scale.   That is, variables with larger scales dominate the KNN classification.
+
+For instance, imagine a
+data set that contains two variables, salary and age (measured in dollars
+and years, respectively). As far as `KNN` is concerned, a difference of \$1,000
+in salary is enormous compared to a difference of 50 years in age. Consequently,
+salary will drive the `KNN` classification results, and age will have
+almost no effect. 
+
+This is contrary to our intuition that a salary difference
+of \$1,000 is quite small compared to an age difference of 50 years. Furthermore,
+the importance of scale to the `KNN` classifier leads to another issue:
+if we measured salary in Japanese yen, or if we measured age in minutes,
+then weâ€™d get quite different classification results from what we get if these
+two variables are measured in dollars and years.
+
+#### Scaling and splitting data into train/test
+
+A good way to handle this problem is to **standardize** the data so that all variables are given a mean of zero and a standard deviation of one and almost all values will fall between -3 and 3. Thus, all variables will be on a comparable scale. The `scale()` function does just this. In standardizing the data, we exclude the qualitative `Purchase` variable.
+
+
+```{r}
+Caravan %>% 
+  select(-Purchase) %>% 
+  gather() %>% 
+  group_by(key) %>% 
+  summarise_all(funs(mean, sd))
+
+std_Caravan <- Caravan %>%
+  select(-Purchase) %>%
+  scale() %>%
+  data.frame() # The scale() function doesn't return a dataframe, so we need to do that manually
+
+std_Caravan %>%    # std_Caravan does not have the Purchase column in it
+  gather() %>% 
+  group_by(key) %>% 
+  summarise_all(funs(mean, sd))
+
+```
+
+Now every column of `std_Caravan` has a standard deviation of one and
+a mean of zero.
+
+We'll now split the observations into a test set, containing the first 1,000
+observations, and a training set, containing the remaining observations.
+
+Then we create the objects needed for KNN.
+
+
+```{r}
+test_Caravan <-       # std_Caravan does not have the Purchase column in it
+  std_Caravan %>%
+  slice(1:1000)
+
+train_Caravan <- 
+  std_Caravan %>%
+  slice(1001:5822)
+
+test_Purchase <- 
+  Caravan %>% 
+  select(Purchase) %>%
+  slice(1:1000) %>%
+  .$Purchase               # recall that knn() needs a vector, not a data frame, for output variables
+
+train_Purchase <- 
+  Caravan %>% 
+  select(Purchase) %>%
+  slice(1001:5822) %>%
+  .$Purchase
+```
+
+
+#### Generating KNN predictions
+
+Let's fit a `KNN` model on the training data using $K = 1$, and evaluate its
+performance on the test data.
+
+
+```{r}
+set.seed(1)
+knn_pred <- knn(train_Caravan, test_Caravan, train_Purchase, k=1)
+(error <- mean(test_Purchase != knn_pred)) # KNN error rate
+mean(test_Purchase != "No")     # Percent of people who purchase insurance
+
+table(knn_pred, test_Purchase)
+
+tibble(.pred = knn_pred,
+       Purchase = test_Purchase) %>%
+  summarize(accuracy = mean(.pred == Purchase),
+            error = mean(.pred != Purchase))
+
+```
+
+
+The KNN error rate on the 1,000 test observations is just under 12%. At first glance, this may appear to be fairly good. However, since only 6% of customers purchased insurance, we could get the error rate down to 6% by always predicting `No` regardless of the values of the predictors!
+
+Suppose that there is some non-trivial cost to trying to sell insurance
+to a given individual. For instance, perhaps a salesperson must visit each
+potential customer. If the company tries to sell insurance to a random
+selection of customers, then the success rate will be only 6%, which may
+be far too low given the costs involved. 
+
+Instead, the company would like
+to try to sell insurance only to customers who are likely to buy it. So the
+overall error rate is not of interest. Instead, the fraction of individuals that
+are correctly predicted to buy insurance is of interest.
+
+It turns out that `KNN` with $K = 1$ does far better than random guessing
+among the customers that are predicted to buy insurance.
+
+Among 77 such
+customers, 9, or 11.7%, actually do purchase insurance. This is double the
+rate that one would obtain from random guessing. 
+
+
+## Sources and Attributions
+
+This lab on Linear Regression in R comes from pp. 109-119 of "Introduction to Statistical Learning with Applications in R" by Gareth James, Daniela Witten, Trevor Hastie and Robert Tibshirani. It was re-implemented in Fall 2016 in `tidyverse` format by Amelia McNamara and R. Jordan Crouser at Smith College.
+M. E. Waggoner at Simpson college made additional changes to implement `broom` and add content and was not as faithful to the original ISLR labs as the Smith College faculty were.  However, this document tries to make a stronger connection between the `R` code of the labs and the theory by providing references to the text and other resources.  

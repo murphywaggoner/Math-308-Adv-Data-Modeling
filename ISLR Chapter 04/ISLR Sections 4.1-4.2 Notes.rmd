@@ -18,6 +18,8 @@ require(texreg)       # screenreg()
 require(ggfortify)    # autoplot()
 require(knitr)        # kable()
 require(broom)        # tidy()
+require(MASS)         # lda(), qda()
+require(car)          # knn()
 
 options(digits = 4)
 ```
@@ -44,4 +46,49 @@ This section of ISLR covers four methods of classification:
 * K-nearest neighbors (KNN).
 
 Other classifiers are covered in Chapters 7, 8, and 9.
+
+#### LDA illustration
+
+```{r}
+midge.train <- as.tibble(read.csv("C:/Users/murphy.waggoner/Documents/GitHub/Math-308-Adv-Data-Modeling/ISLR Chapter 01/ISLR Chapter 1 Midge.txt", 
+                                  header = TRUE))
+
+str(midge.train)
+
+meanWL <- mean(midge.train$WingLength)
+meanAL <- mean(midge.train$AntennaLength)
+
+mref <- 9.66/14.78
+bref <- meanAL - mref*meanWL
+
+midge.train %>% 
+  ggplot(aes(x = WingLength, y = AntennaLength, 
+             col = Type, shape = Type)) + 
+  geom_point() +
+  geom_point(aes(x = meanWL, y = meanAL), colour="black", size = 2) +
+  geom_abline(slope = mref, intercept = bref) -> baseplot
+
+midge.train %>% 
+  mutate(bperp = AntennaLength - (-1/mref)*WingLength) -> midge.train
+
+for(i in 1:nrow(midge.train)){
+  baseplot + geom_abline(slope = -1/mref, intercept = midge.train$bperp[[i]] ,
+                         alpha = 0.2) -> baseplot
+}
+
+midge.train %>% 
+  mutate(xproj = (bref - bperp)/(-1/mref - mref),
+         yproj = mref*(xproj) + bref) -> midge.train
+
+
+baseplot + geom_point(aes(x = xproj, y = yproj, color = Type), size = 2, data = midge.train)
+
+midge_lda <- lda(Type ~ WingLength + AntennaLength, data = midge.train)
+
+midge_lda
+
+plot(midge_lda)
+```
+
+
 
